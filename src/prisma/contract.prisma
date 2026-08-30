@@ -1,0 +1,13 @@
+// use prisma-next
+
+model Venue {
+  id           Int      @id @default(autoincrement())
+  name         String
+  location     String
+  capacity     Int
+  type         String
+  price        Float
+  availability Boolean  @default(true)
+  createdAt    TimestamptzString @default(now())
+  updatedAt    temporal.updatedAtString()
+}
