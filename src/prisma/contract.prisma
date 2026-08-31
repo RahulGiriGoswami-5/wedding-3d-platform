@@ -8,6 +8,8 @@ model Venue {
   type         String
   price        Float
   availability Boolean  @default(true)
+  modelUrl     String?
+  layoutData   String?
   createdAt    TimestamptzString @default(now())
   updatedAt    temporal.updatedAtString()
 }
