@@ -1046,21 +1046,48 @@ export default function InventoryPage() {
             </div>
 
             <button
-              style={{
-                width: "100%",
-                border: "none",
-                background:
-                  "linear-gradient(135deg, #5b5ce2, #7475ed)",
-                color: "white",
-                padding: "14px",
-                borderRadius: "10px",
-                fontSize: "14px",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              Add to Design
-            </button>
+  onClick={() => {
+    if (!selectedItem) return;
+
+    localStorage.setItem(
+      "design-item",
+      JSON.stringify(selectedItem)
+    );
+
+    window.location.href = "/";
+  }}
+>
+  <button
+  type="button"
+  onClick={() => {
+    if (!selectedItem) {
+      alert("No inventory item selected.");
+      return;
+    }
+
+    localStorage.setItem(
+      "design-item",
+      JSON.stringify(selectedItem)
+    );
+
+    window.location.href = "/";
+  }}
+  style={{
+    width: "100%",
+    border: "none",
+    background:
+      "linear-gradient(135deg, #5b5ce2, #7475ed)",
+    color: "white",
+    padding: "14px",
+    borderRadius: "10px",
+    fontSize: "14px",
+    fontWeight: 700,
+    cursor: "pointer",
+  }}
+>
+  Add to Design
+</button>
+</button>
           </div>
         </div>
       )}

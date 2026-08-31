@@ -35,9 +35,48 @@ type ElementType =
   | "flowers"
   | "lamp";
 
+/*
+   InventoryItem comes directly from our
+   /api/inventory endpoint.
+
+   These are the same fields we created
+   in the Prisma 8 contract.
+*/
+type InventoryItem = {
+  id: number;
+  name: string;
+  category: string;
+  modelUrl: string;
+  imageUrl: string | null;
+  width: number;
+  depth: number;
+  height: number;
+  quantity: number;
+  availableQuantity: number;
+  price: number;
+};
+
+/*
+   FurnitureItem is the object actually placed
+   inside the venue editor.
+
+   inventoryId tells us which inventory item
+   this object came from.
+*/
 type FurnitureItem = {
   id: number;
+  inventoryId?: number;
+
   type: ElementType;
+
+  name?: string;
+  modelUrl?: string;
+  imageUrl?: string | null;
+
+  width?: number;
+  depth?: number;
+  height?: number;
+
   position: [number, number, number];
   rotation: number;
 };
@@ -47,8 +86,16 @@ type SavedScene = {
 };
 
 /* =========================================================
-   REAL-LIFE DIMENSIONS
+   REAL-LIFE DEFAULT DIMENSIONS
 ========================================================= */
+
+/*
+   These remain as fallbacks for older saved scenes
+   or objects that do not have inventory dimensions.
+
+   New inventory objects use their own
+   width/depth/height values.
+*/
 
 const DIMENSIONS: Record<
   ElementType,
@@ -96,10 +143,23 @@ const DIMENSIONS: Record<
 };
 
 /* =========================================================
-   MODEL PATHS
+   DEFAULT MODEL PATHS
 ========================================================= */
 
-const MODEL_PATHS: Record<ElementType, string> = {
+/*
+   These are kept ONLY as fallbacks.
+
+   New inventory objects will use:
+
+      inventoryItem.modelUrl
+
+   instead.
+*/
+
+const MODEL_PATHS: Record<
+  ElementType,
+  string
+> = {
   chair: "/models/SheenChair.glb",
   table: "/models/RoundTable.glb",
   sofa: "/models/Sofa.glb",
@@ -108,7 +168,10 @@ const MODEL_PATHS: Record<ElementType, string> = {
   lamp: "/models/Lamp.glb",
 };
 
-const LABELS: Record<ElementType, string> = {
+const LABELS: Record<
+  ElementType,
+  string
+> = {
   chair: "Chair",
   table: "Table",
   sofa: "Sofa",
@@ -117,7 +180,10 @@ const LABELS: Record<ElementType, string> = {
   lamp: "Lamp",
 };
 
-const ICONS: Record<ElementType, string> = {
+const ICONS: Record<
+  ElementType,
+  string
+> = {
   chair: "🪑",
   table: "🟤",
   sofa: "🛋️",
@@ -127,31 +193,137 @@ const ICONS: Record<ElementType, string> = {
 };
 
 /* =========================================================
+   INVENTORY CATEGORY → ELEMENT TYPE
+========================================================= */
+
+function getElementType(
+  category: string
+): ElementType {
+  const value =
+    category.toLowerCase();
+
+  if (
+    value.includes("table")
+  ) {
+    return "table";
+  }
+
+  if (
+    value.includes("sofa") ||
+    value.includes("couch")
+  ) {
+    return "sofa";
+  }
+
+  if (
+    value.includes("stage")
+  ) {
+    return "stage";
+  }
+
+  if (
+    value.includes("flower") ||
+    value.includes("decoration")
+  ) {
+    return "flowers";
+  }
+
+  if (
+    value.includes("lamp") ||
+    value.includes("light")
+  ) {
+    return "lamp";
+  }
+
+  if (
+    value.includes("chair") ||
+    value.includes("seat")
+  ) {
+    return "chair";
+  }
+
+  return "chair";
+}
+
+/* =========================================================
+   GET ITEM DIMENSIONS
+========================================================= */
+
+function getItemDimensions(
+  item: FurnitureItem
+) {
+  const fallback =
+    DIMENSIONS[item.type];
+
+  return {
+    width:
+      typeof item.width ===
+      "number"
+        ? item.width
+        : fallback.width,
+
+    depth:
+      typeof item.depth ===
+      "number"
+        ? item.depth
+        : fallback.depth,
+
+    height:
+      typeof item.height ===
+      "number"
+        ? item.height
+        : fallback.height,
+  };
+}
+
+/* =========================================================
    SCALE 3D MODEL TO REAL DIMENSIONS
 ========================================================= */
 
 function createModel(
   scene: THREE.Object3D,
-  type: ElementType
+  dimensions: {
+    width: number;
+    depth: number;
+    height: number;
+  }
 ) {
-  const model = scene.clone(true);
+  const model =
+    scene.clone(true);
 
-  const box = new THREE.Box3().setFromObject(model);
+  const box =
+    new THREE.Box3().setFromObject(
+      model
+    );
 
-  const size = new THREE.Vector3();
+  const size =
+    new THREE.Vector3();
 
   box.getSize(size);
 
-  const target = DIMENSIONS[type];
+  /*
+     Scale X → real width
+     Scale Y → real height
+     Scale Z → real depth
+  */
 
   const scaleX =
-    size.x > 0 ? target.width / size.x : 1;
+    size.x > 0
+      ? dimensions.width /
+        size.x
+      : 1;
 
   const scaleY =
-    size.y > 0 ? target.height / size.y : 1;
+    size.y > 0
+      ? dimensions.height /
+        size.y
+      : 1;
 
   const scaleZ =
-    size.z > 0 ? target.depth / size.z : 1;
+    size.z > 0
+      ? dimensions.depth /
+        size.z
+      : 1;
 
   model.scale.set(
     scaleX,
@@ -159,10 +331,18 @@ function createModel(
     scaleZ
   );
 
-  const finalBox =
-    new THREE.Box3().setFromObject(model);
+  /*
+     Put the bottom of the model
+     exactly on the venue floor.
+  */
 
-  model.position.y = -finalBox.min.y;
+  const finalBox =
+    new THREE.Box3().setFromObject(
+      model
+    );
+
+  model.position.y =
+    -finalBox.min.y;
 
   return model;
 }
@@ -190,21 +370,59 @@ function Furniture3D({
     position: [number, number, number]
   ) => void;
 }) {
-  const { scene } = useGLTF(
-    MODEL_PATHS[item.type]
-  );
+  /*
+     IMPORTANT:
 
-  const { camera, raycaster } = useThree();
+     Inventory modelUrl is preferred.
 
-  const model = useMemo(
-    () => createModel(scene, item.type),
-    [scene, item.type]
-  );
+     MODEL_PATHS remains as a fallback
+     for older objects saved before
+     Phase 2 Step 3.
+  */
+
+  const modelUrl =
+    item.modelUrl ||
+    MODEL_PATHS[item.type];
+
+  const { scene } =
+    useGLTF(modelUrl);
+
+  const {
+    camera,
+    raycaster,
+  } = useThree();
+
+  const dimensions =
+    getItemDimensions(item);
+
+  const model =
+    useMemo(
+      () =>
+        createModel(
+          scene,
+          dimensions
+        ),
+      [
+        scene,
+        dimensions.width,
+        dimensions.depth,
+        dimensions.height,
+      ]
+    );
+
+  /* =======================================================
+     SELECT OBJECT
+  ======================================================= */
 
   const handlePointerDown = (
     e: ThreeEvent<PointerEvent>
   ) => {
     e.stopPropagation();
+
+    /*
+       Measurement mode takes
+       priority over normal selection.
+    */
 
     if (measureMode) {
       onMeasureSelect();
@@ -214,21 +432,42 @@ function Furniture3D({
     onSelect();
   };
 
+  /* =======================================================
+     MOVE OBJECT
+  ======================================================= */
+
   const handlePointerMove = (
     e: ThreeEvent<PointerEvent>
   ) => {
-    if (measureMode || !selected) {
+    /*
+       Do not move while measuring.
+    */
+
+    if (
+      measureMode ||
+      !selected
+    ) {
       return;
     }
 
     e.stopPropagation();
 
-    const plane = new THREE.Plane(
-      new THREE.Vector3(0, 1, 0),
-      0
-    );
+    /*
+       Horizontal floor plane.
+    */
 
-    const point = new THREE.Vector3();
+    const plane =
+      new THREE.Plane(
+        new THREE.Vector3(
+          0,
+          1,
+          0
+        ),
+        0
+      );
+
+    const point =
+      new THREE.Vector3();
 
     raycaster.setFromCamera(
       e.pointer,
@@ -241,13 +480,23 @@ function Furniture3D({
     );
 
     if (point) {
+      /*
+         Keep the object inside
+         the 12m × 12m venue.
+
+         The centre is kept between
+         -5.5m and +5.5m.
+      */
+
       onMove([
         THREE.MathUtils.clamp(
           point.x,
           -5.5,
           5.5
         ),
+
         0,
+
         THREE.MathUtils.clamp(
           point.z,
           -5.5,
@@ -275,6 +524,10 @@ function Furniture3D({
           handlePointerMove
         }
       />
+
+      {/* =================================================
+          NORMAL SELECTION
+      ================================================= */}
 
       {selected && (
         <mesh
@@ -304,6 +557,10 @@ function Furniture3D({
           />
         </mesh>
       )}
+
+      {/* =================================================
+          MEASUREMENT SELECTION
+      ================================================= */}
 
       {measureSelected && (
         <mesh
@@ -360,9 +617,24 @@ function Furniture2D({
     position: [number, number, number]
   ) => void;
 }) {
-  const { camera, raycaster } = useThree();
+  const {
+    camera,
+    raycaster,
+  } = useThree();
 
-  const dimensions = DIMENSIONS[item.type];
+  /*
+     IMPORTANT:
+
+     2D view now also uses the
+     actual inventory dimensions.
+  */
+
+  const dimensions =
+    getItemDimensions(item);
+
+  /* =======================================================
+     SELECT
+  ======================================================= */
 
   const handlePointerDown = (
     e: ThreeEvent<PointerEvent>
@@ -376,21 +648,34 @@ function Furniture2D({
     }
   };
 
+  /* =======================================================
+     MOVE
+  ======================================================= */
+
   const handlePointerMove = (
     e: ThreeEvent<PointerEvent>
   ) => {
-    if (measureMode || !selected) {
+    if (
+      measureMode ||
+      !selected
+    ) {
       return;
     }
 
     e.stopPropagation();
 
-    const plane = new THREE.Plane(
-      new THREE.Vector3(0, 1, 0),
-      0
-    );
+    const plane =
+      new THREE.Plane(
+        new THREE.Vector3(
+          0,
+          1,
+          0
+        ),
+        0
+      );
 
-    const point = new THREE.Vector3();
+    const point =
+      new THREE.Vector3();
 
     raycaster.setFromCamera(
       e.pointer,
@@ -409,7 +694,9 @@ function Furniture2D({
           -5.5,
           5.5
         ),
+
         0,
+
         THREE.MathUtils.clamp(
           point.z,
           -5.5,
@@ -419,34 +706,54 @@ function Furniture2D({
     }
   };
 
+  /* =======================================================
+     OBJECT SHAPE
+  ======================================================= */
+
   const isCircle =
     item.type === "table" ||
     item.type === "flowers" ||
     item.type === "lamp";
 
+  /* =======================================================
+     OBJECT COLOUR
+  ======================================================= */
+
   let fill = "#e5e7eb";
 
-  if (item.type === "chair") {
+  if (
+    item.type === "chair"
+  ) {
     fill = "#fde68a";
   }
 
-  if (item.type === "table") {
+  if (
+    item.type === "table"
+  ) {
     fill = "#ddd6fe";
   }
 
-  if (item.type === "sofa") {
+  if (
+    item.type === "sofa"
+  ) {
     fill = "#bbf7d0";
   }
 
-  if (item.type === "stage") {
+  if (
+    item.type === "stage"
+  ) {
     fill = "#fecaca";
   }
 
-  if (item.type === "flowers") {
+  if (
+    item.type === "flowers"
+  ) {
     fill = "#fbcfe8";
   }
 
-  if (item.type === "lamp") {
+  if (
+    item.type === "lamp"
+  ) {
     fill = "#fed7aa";
   }
 
@@ -463,7 +770,10 @@ function Furniture2D({
         0,
       ]}
     >
-      {/* OBJECT FOOTPRINT */}
+      {/* =================================================
+          OBJECT FOOTPRINT
+      ================================================= */}
+
       <mesh
         onPointerDown={
           handlePointerDown
@@ -475,8 +785,10 @@ function Furniture2D({
         {isCircle ? (
           <cylinderGeometry
             args={[
-              dimensions.width / 2,
-              dimensions.width / 2,
+              dimensions.width /
+                2,
+              dimensions.width /
+                2,
               0.08,
               40,
             ]}
@@ -498,7 +810,10 @@ function Furniture2D({
         />
       </mesh>
 
-      {/* SELECTION */}
+      {/* =================================================
+          NORMAL SELECTION
+      ================================================= */}
+
       {selected && (
         <mesh
           rotation={[
@@ -515,16 +830,25 @@ function Furniture2D({
           {isCircle ? (
             <ringGeometry
               args={[
-                dimensions.width / 2 + 0.08,
-                dimensions.width / 2 + 0.12,
+                dimensions.width /
+                    2 +
+                  0.08,
+
+                dimensions.width /
+                    2 +
+                  0.12,
+
                 40,
               ]}
             />
           ) : (
             <planeGeometry
               args={[
-                dimensions.width + 0.16,
-                dimensions.depth + 0.16,
+                dimensions.width +
+                  0.16,
+
+                dimensions.depth +
+                  0.16,
               ]}
             />
           )}
@@ -533,12 +857,17 @@ function Furniture2D({
             color="#2563eb"
             transparent
             opacity={0.35}
-            side={THREE.DoubleSide}
+            side={
+              THREE.DoubleSide
+            }
           />
         </mesh>
       )}
 
-      {/* MEASUREMENT SELECTION */}
+      {/* =================================================
+          MEASUREMENT SELECTION
+      ================================================= */}
+
       {measureSelected && (
         <mesh
           rotation={[
@@ -555,16 +884,25 @@ function Furniture2D({
           {isCircle ? (
             <ringGeometry
               args={[
-                dimensions.width / 2 + 0.13,
-                dimensions.width / 2 + 0.17,
+                dimensions.width /
+                    2 +
+                  0.13,
+
+                dimensions.width /
+                    2 +
+                  0.17,
+
                 40,
               ]}
             />
           ) : (
             <planeGeometry
               args={[
-                dimensions.width + 0.22,
-                dimensions.depth + 0.22,
+                dimensions.width +
+                  0.22,
+
+                dimensions.depth +
+                  0.22,
               ]}
             />
           )}
@@ -573,7 +911,9 @@ function Furniture2D({
             color="#ef4444"
             transparent
             opacity={0.4}
-            side={THREE.DoubleSide}
+            side={
+              THREE.DoubleSide
+            }
           />
         </mesh>
       )}
@@ -592,7 +932,10 @@ function Floor({
 }) {
   return (
     <>
-      {/* WHITE VENUE PLATFORM */}
+      {/* =================================================
+          WHITE VENUE PLATFORM
+      ================================================= */}
+
       <mesh
         rotation={[
           -Math.PI / 2,
@@ -612,11 +955,16 @@ function Floor({
 
         <meshStandardMaterial
           color="#ffffff"
-          side={THREE.DoubleSide}
+          side={
+            THREE.DoubleSide
+          }
         />
       </mesh>
 
-      {/* GRID */}
+      {/* =================================================
+          GRID
+      ================================================= */}
+
       <Grid
         args={[
           12,
@@ -638,7 +986,10 @@ function Floor({
         ]}
       />
 
-      {/* PLATFORM BORDER */}
+      {/* =================================================
+          PLATFORM BORDER
+      ================================================= */}
+
       <Line
         points={[
           [-6, 0.04, -6],
@@ -651,7 +1002,10 @@ function Floor({
         lineWidth={3}
       />
 
-      {/* TOP/BOTTOM DIMENSION */}
+      {/* =================================================
+          TOP/BOTTOM DIMENSION
+      ================================================= */}
+
       <Line
         points={[
           [-6, 0.05, 6.35],
@@ -661,7 +1015,10 @@ function Floor({
         lineWidth={1}
       />
 
-      {/* LEFT/RIGHT DIMENSION */}
+      {/* =================================================
+          LEFT/RIGHT DIMENSION
+      ================================================= */}
+
       <Line
         points={[
           [-6.35, 0.05, -6],
@@ -685,18 +1042,19 @@ function Measurement({
   start: FurnitureItem;
   end: FurnitureItem;
 }) {
-  const distance = Math.sqrt(
-    Math.pow(
-      end.position[0] -
-        start.position[0],
-      2
-    ) +
+  const distance =
+    Math.sqrt(
       Math.pow(
-        end.position[2] -
-          start.position[2],
+        end.position[0] -
+          start.position[0],
         2
-      )
-  );
+      ) +
+        Math.pow(
+          end.position[2] -
+            start.position[2],
+          2
+        )
+    );
 
   const middle: [
     number,
@@ -706,7 +1064,9 @@ function Measurement({
     (start.position[0] +
       end.position[0]) /
       2,
+
     0.4,
+
     (start.position[2] +
       end.position[2]) /
       2,
@@ -721,6 +1081,7 @@ function Measurement({
             0.2,
             start.position[2],
           ],
+
           [
             end.position[0],
             0.2,
@@ -757,20 +1118,31 @@ function HtmlDistanceLabel({
   return (
     <div
       style={{
-        position: "absolute",
+        position:
+          "absolute",
+
         left: "50%",
+
         top: "50%",
+
         transform:
           "translate(-50%, -50%)",
-        pointerEvents: "none",
+
+        pointerEvents:
+          "none",
       }}
     >
       <div
         className="distance-label"
         style={{
-          position: "absolute",
-          left: position[0] * 20,
-          top: position[2] * 20,
+          position:
+            "absolute",
+
+          left:
+            position[0] * 20,
+
+          top:
+            position[2] * 20,
         }}
       >
         {distance.toFixed(2)} m
@@ -954,12 +1326,20 @@ function BuildPanel({
   addItem,
   measureMode,
   startMeasurement,
+  inventory,
+  inventoryLoading,
 }: {
   addItem: (
-    type: ElementType
+    item: InventoryItem
   ) => void;
+
   measureMode: boolean;
+
   startMeasurement: () => void;
+
+  inventory: InventoryItem[];
+
+  inventoryLoading: boolean;
 }) {
   return (
     <section className="build-panel">
@@ -968,49 +1348,300 @@ function BuildPanel({
       </div>
 
       <div className="panel-content">
+
+        {/* =================================================
+            INVENTORY
+        ================================================= */}
+
         <div className="section-title">
-          Add Elements
+          Inventory
         </div>
 
-        <div className="element-list">
-          {(
-            Object.keys(
-              LABELS
-            ) as ElementType[]
-          ).map(
-            (type) => (
-              <button
-                className="element-button"
-                key={type}
-                onClick={() =>
-                  addItem(
-                    type
-                  )
-                }
-              >
-                <span className="element-icon">
-                  {
-                    ICONS[
-                      type
-                    ]
-                  }
-                </span>
+        {inventoryLoading ? (
+          <div
+            style={{
+              padding:
+                "20px 5px",
 
-                <span>
-                  {
-                    LABELS[
-                      type
-                    ]
-                  }
-                </span>
+              textAlign:
+                "center",
 
-                <span className="add-plus">
-                  +
-                </span>
-              </button>
-            )
-          )}
-        </div>
+              color:
+                "#8b95a1",
+
+              fontSize:
+                "12px",
+            }}
+          >
+            Loading inventory...
+          </div>
+        ) : inventory.length ===
+          0 ? (
+          <div
+            style={{
+              padding:
+                "20px 5px",
+
+              textAlign:
+                "center",
+
+              color:
+                "#8b95a1",
+
+              fontSize:
+                "12px",
+            }}
+          >
+            No inventory items
+            found.
+          </div>
+        ) : (
+          <div
+            style={{
+              display:
+                "flex",
+
+              flexDirection:
+                "column",
+
+              gap: "10px",
+            }}
+          >
+            {inventory.map(
+              (item) => {
+                const
+                  unavailable =
+                    item.availableQuantity <=
+                    0;
+
+                return (
+                  <button
+                    key={
+                      item.id
+                    }
+                    className="element-button"
+                    onClick={() =>
+                      addItem(
+                        item
+                      )
+                    }
+                    disabled={
+                      unavailable
+                    }
+                    style={{
+                      padding:
+                        "8px",
+
+                      cursor:
+                        unavailable
+                          ? "not-allowed"
+                          : "pointer",
+
+                      opacity:
+                        unavailable
+                          ? 0.5
+                          : 1,
+                    }}
+                  >
+                    {/* =====================================
+                        IMAGE
+                    ===================================== */}
+
+                    <span
+                      style={{
+                        width:
+                          "48px",
+
+                        height:
+                          "48px",
+
+                        borderRadius:
+                          "6px",
+
+                        overflow:
+                          "hidden",
+
+                        background:
+                          "#f1f3f5",
+
+                        display:
+                          "flex",
+
+                        alignItems:
+                          "center",
+
+                        justifyContent:
+                          "center",
+
+                        flexShrink:
+                          0,
+                      }}
+                    >
+                      {item.imageUrl ? (
+                        <img
+                          src={
+                            item.imageUrl
+                          }
+                          alt={
+                            item.name
+                          }
+                          style={{
+                            width:
+                              "100%",
+
+                            height:
+                              "100%",
+
+                            objectFit:
+                              "cover",
+                          }}
+                        />
+                      ) : (
+                        <span
+                          style={{
+                            fontSize:
+                              "20px",
+                          }}
+                        >
+                          {ICONS[
+                            getElementType(
+                              item.category
+                            )
+                          ]}
+                        </span>
+                      )}
+                    </span>
+
+                    {/* =====================================
+                        INFORMATION
+                    ===================================== */}
+
+                    <span
+                      style={{
+                        display:
+                          "flex",
+
+                        flexDirection:
+                          "column",
+
+                        alignItems:
+                          "flex-start",
+
+                        minWidth:
+                          0,
+
+                        flex: 1,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize:
+                            "12px",
+
+                          fontWeight:
+                            800,
+
+                          color:
+                            "#374151",
+
+                          overflow:
+                            "hidden",
+
+                          textOverflow:
+                            "ellipsis",
+
+                          whiteSpace:
+                            "nowrap",
+
+                          width:
+                            "100%",
+                        }}
+                      >
+                        {
+                          item.name
+                        }
+                      </span>
+
+                      <span
+                        style={{
+                          fontSize:
+                            "10px",
+
+                          color:
+                            "#8b95a1",
+
+                          marginTop:
+                            "3px",
+                        }}
+                      >
+                        {
+                          item.category
+                        }
+                      </span>
+
+                      <span
+                        style={{
+                          fontSize:
+                            "9px",
+
+                          color:
+                            "#9ca3af",
+
+                          marginTop:
+                            "3px",
+                        }}
+                      >
+                        {
+                          item.width
+                        }
+                        m ×{" "}
+                        {
+                          item.depth
+                        }
+                        m ×{" "}
+                        {
+                          item.height
+                        }
+                        m
+                      </span>
+
+                      <span
+                        style={{
+                          fontSize:
+                            "9px",
+
+                          color:
+                            unavailable
+                              ? "#dc2626"
+                              : "#16a34a",
+
+                          marginTop:
+                            "2px",
+                        }}
+                      >
+                        {unavailable
+                          ? "Out of stock"
+                          : `${item.availableQuantity} available`}
+                      </span>
+                    </span>
+
+                    {/* =====================================
+                        ADD ICON
+                    ===================================== */}
+
+                    <span className="add-plus">
+                      +
+                    </span>
+                  </button>
+                );
+              }
+            )}
+          </div>
+        )}
+
+        {/* =================================================
+            TOOLS
+        ================================================= */}
 
         <div className="section-title second">
           Tools
@@ -1037,33 +1668,40 @@ function BuildPanel({
           </span>
         </button>
 
+        {/* =================================================
+            TIP
+        ================================================= */}
+
         <div className="tip-box">
           <strong>
             Quick controls
           </strong>
 
           <p>
-            Drag objects
-            to move them.
+            Drag objects to move
+            them.
           </p>
 
           <p>
-            Press{" "}
-            <b>R</b>{" "}
-            to rotate.
+            Press <b>R</b> to
+            rotate.
           </p>
 
           <p>
-            Use 2D view
-            for precise
-            floor planning.
+            Use 2D view for
+            precise floor
+            planning.
           </p>
 
           <p>
-            All furniture
-            uses practical
-            real-world
-            dimensions.
+            Inventory items use
+            their real dimensions.
+          </p>
+
+          <p>
+            Click an inventory
+            item to add it to
+            your design.
           </p>
         </div>
       </div>
@@ -1071,6 +1709,9 @@ function BuildPanel({
   );
 }
 
+/* =========================================================
+   END OF FIRST SECTION
+========================================================= */
 /* =========================================================
    PROPERTIES PANEL
 ========================================================= */
@@ -1111,10 +1752,18 @@ function PropertiesPanel({
     );
   }
 
+  /*
+     Use the dimensions stored
+     with the inventory item.
+
+     Fall back to the old dimensions
+     for older saved objects.
+  */
+
   const dimensions =
-    DIMENSIONS[
-      selected.type
-    ];
+    getItemDimensions(
+      selected
+    );
 
   return (
     <aside className="properties-panel">
@@ -1133,15 +1782,16 @@ function PropertiesPanel({
 
         <div>
           <div className="selected-name">
-            {
+            {selected.name ||
               LABELS[
                 selected.type
-              ]
-            }
+              ]}
           </div>
 
           <div className="selected-type">
-            Furniture element
+            {selected.inventoryId
+              ? "Inventory item"
+              : "Furniture element"}
           </div>
         </div>
       </div>
@@ -1225,6 +1875,10 @@ function PropertiesPanel({
   );
 }
 
+/* =========================================================
+   PROPERTY ROW
+========================================================= */
+
 function PropertyRow({
   label,
   value,
@@ -1271,6 +1925,7 @@ function BottomToolbar({
         }
       >
         📏
+
         <span>
           Measure
         </span>
@@ -1285,6 +1940,7 @@ function BottomToolbar({
         }
       >
         ↶
+
         <span>
           Reset
         </span>
@@ -1297,6 +1953,7 @@ function BottomToolbar({
         }
       >
         ✕
+
         <span>
           Clear
         </span>
@@ -1320,6 +1977,10 @@ function BottomToolbar({
 ========================================================= */
 
 export default function Home() {
+  /* =======================================================
+     VENUE
+  ======================================================= */
+
   const [venue, setVenue] =
     useState<Venue | null>(
       null
@@ -1331,30 +1992,49 @@ export default function Home() {
   const [error, setError] =
     useState("");
 
+  /* =======================================================
+     INVENTORY
+  ======================================================= */
+
+  const [
+    inventory,
+    setInventory,
+  ] = useState<
+    InventoryItem[]
+  >([]);
+
+  const [
+    inventoryLoading,
+    setInventoryLoading,
+  ] = useState(true);
+
+  /* =======================================================
+     PLACED ITEMS
+  ======================================================= */
+
   const [items, setItems] =
-    useState<FurnitureItem[]>([
-      {
-        id: 1,
-        type: "chair",
-        position: [
-          0,
-          0,
-          0,
-        ],
-        rotation: 0,
-      },
-    ]);
+    useState<FurnitureItem[]>(
+      []
+    );
 
   const [
     selectedId,
     setSelectedId,
   ] =
     useState<number | null>(
-      1
+      null
     );
+
+  /* =======================================================
+     SAVE
+  ======================================================= */
 
   const [saving, setSaving] =
     useState(false);
+
+  /* =======================================================
+     MEASUREMENT
+  ======================================================= */
 
   const [
     measureMode,
@@ -1378,11 +2058,19 @@ export default function Home() {
       null
     );
 
+  /* =======================================================
+     NAVIGATION
+  ======================================================= */
+
   const [
     activeNav,
     setActiveNav,
   ] =
     useState("Build");
+
+  /* =======================================================
+     VIEW
+  ======================================================= */
 
   const [
     viewMode,
@@ -1406,6 +2094,12 @@ export default function Home() {
       params.get(
         "venueId"
       );
+
+    /*
+       If no venueId exists,
+       we still allow the editor
+       to work using local state.
+    */
 
     if (!idParam) {
       setLoading(false);
@@ -1448,6 +2142,11 @@ export default function Home() {
             null
         );
 
+        /*
+           Restore previously saved
+           furniture layout.
+        */
+
         if (
           loadedVenue?.layoutData
         ) {
@@ -1472,9 +2171,7 @@ export default function Home() {
                 0
               ) {
                 setSelectedId(
-                  saved
-                    .items[0]
-                    .id
+                  saved.items[0].id
                 );
               }
             }
@@ -1501,6 +2198,68 @@ export default function Home() {
   }, []);
 
   /* =======================================================
+     LOAD INVENTORY
+  ======================================================= */
+
+  useEffect(() => {
+    async function loadInventory() {
+      try {
+        setInventoryLoading(
+          true
+        );
+
+        const response =
+          await fetch(
+            "/api/inventory"
+          );
+
+        if (!response.ok) {
+          throw new Error(
+            "Failed to load inventory"
+          );
+        }
+
+        const data =
+          await response.json();
+
+        /*
+           Our API returns the
+           inventory array directly.
+
+           This fallback also supports
+           { inventory: [...] }.
+        */
+
+        const inventoryData =
+          Array.isArray(data)
+            ? data
+            : Array.isArray(
+                data?.inventory
+              )
+            ? data.inventory
+            : [];
+
+        setInventory(
+          inventoryData
+        );
+      } catch (err) {
+        console.error(
+          "Inventory loading error:",
+          err
+        );
+
+        setInventory([]);
+      } finally {
+        setInventoryLoading(
+          false
+        );
+      }
+    }
+
+    loadInventory();
+  }, []);
+
+  /* =======================================================
      KEYBOARD CONTROLS
   ======================================================= */
 
@@ -1515,12 +2274,16 @@ export default function Home() {
         return;
       }
 
+      /* ROTATE */
+
       if (
         e.key.toLowerCase() ===
         "r"
       ) {
         rotateSelected();
       }
+
+      /* DELETE */
 
       if (
         e.key === "Delete" ||
@@ -1529,6 +2292,8 @@ export default function Home() {
       ) {
         deleteSelected();
       }
+
+      /* MOVEMENT */
 
       const amount =
         e.shiftKey
@@ -1566,7 +2331,10 @@ export default function Home() {
         dz = amount;
       }
 
-      if (dx !== 0 || dz !== 0) {
+      if (
+        dx !== 0 ||
+        dz !== 0
+      ) {
         e.preventDefault();
 
         setItems(
@@ -1577,19 +2345,20 @@ export default function Home() {
                 selectedId
                   ? {
                       ...item,
+
                       position:
                         [
                           THREE.MathUtils.clamp(
-                            item
-                              .position[0] +
+                            item.position[0] +
                               dx,
                             -5.5,
                             5.5
                           ),
+
                           0,
+
                           THREE.MathUtils.clamp(
-                            item
-                              .position[2] +
+                            item.position[2] +
                               dz,
                             -5.5,
                             5.5
@@ -1615,23 +2384,77 @@ export default function Home() {
   });
 
   /* =======================================================
-     ADD ELEMENT
+     ADD INVENTORY ITEM
   ======================================================= */
 
   function addItem(
-    type: ElementType
+    inventoryItem: InventoryItem
   ) {
+    /*
+       Do not allow an item with
+       zero available quantity.
+    */
+
+    if (
+      inventoryItem.availableQuantity <=
+      0
+    ) {
+      alert(
+        "This item is currently unavailable."
+      );
+
+      return;
+    }
+
     const id =
       Date.now();
 
+    /*
+       Convert the inventory category
+       into one of our supported
+       visual types.
+
+       The actual model comes from
+       inventoryItem.modelUrl.
+    */
+
+    const type =
+      getElementType(
+        inventoryItem.category
+      );
+
     const item: FurnitureItem = {
       id,
+
+      inventoryId:
+        inventoryItem.id,
+
       type,
+
+      name:
+        inventoryItem.name,
+
+      modelUrl:
+        inventoryItem.modelUrl,
+
+      imageUrl:
+        inventoryItem.imageUrl,
+
+      width:
+        inventoryItem.width,
+
+      depth:
+        inventoryItem.depth,
+
+      height:
+        inventoryItem.height,
+
       position: [
         0,
         0,
         0,
       ],
+
       rotation: 0,
     };
 
@@ -1642,8 +2465,60 @@ export default function Home() {
       ]
     );
 
-    setSelectedId(id);
+    setSelectedId(
+      id
+    );
   }
+
+  /* =======================================================
+     ADD INVENTORY ITEM FROM INVENTORY PAGE
+  ======================================================= */
+
+  useEffect(() => {
+    /*
+       Wait until the venue/layout has finished loading.
+
+       The inventory page stores the selected inventory
+       item in localStorage before opening this page.
+    */
+
+    if (loading) {
+      return;
+    }
+
+    const pendingItem =
+      localStorage.getItem(
+        "design-item"
+      );
+
+    if (!pendingItem) {
+      return;
+    }
+
+    try {
+      const inventoryItem =
+        JSON.parse(
+          pendingItem
+        ) as InventoryItem;
+
+      localStorage.removeItem(
+        "design-item"
+      );
+
+      addItem(
+        inventoryItem
+      );
+    } catch (err) {
+      console.error(
+        "Unable to add inventory item to design:",
+        err
+      );
+
+      localStorage.removeItem(
+        "design-item"
+      );
+    }
+  }, [loading]);
 
   /* =======================================================
      MOVE ELEMENT
@@ -1690,6 +2565,7 @@ export default function Home() {
             selectedId
               ? {
                   ...item,
+
                   rotation:
                     item.rotation +
                     Math.PI /
@@ -1747,6 +2623,10 @@ export default function Home() {
     );
   }
 
+  /* =======================================================
+     SELECT MEASUREMENT ITEM
+  ======================================================= */
+
   function selectMeasurementItem(
     id: number
   ) {
@@ -1777,6 +2657,10 @@ export default function Home() {
     );
   }
 
+  /* =======================================================
+     CLEAR MEASUREMENT
+  ======================================================= */
+
   function clearMeasurement() {
     setMeasurementStartId(
       null
@@ -1792,14 +2676,19 @@ export default function Home() {
   }
 
   /* =======================================================
-     SAVE
+     SAVE SCENE
   ======================================================= */
 
   async function saveScene() {
-    const sceneData: SavedScene =
-      {
-        items,
-      };
+    const sceneData:
+      SavedScene = {
+      items,
+    };
+
+    /*
+       If no venue is selected,
+       save locally.
+    */
 
     if (!venue) {
       localStorage.setItem(
@@ -1826,30 +2715,42 @@ export default function Home() {
           "/api/venues",
           {
             method: "PUT",
+
             headers: {
               "Content-Type":
                 "application/json",
             },
-            body: JSON.stringify(
-              {
+
+            body:
+              JSON.stringify({
                 id: venue.id,
-                name: venue.name,
+
+                name:
+                  venue.name,
+
                 location:
                   venue.location,
+
                 capacity:
                   venue.capacity,
-                type: venue.type,
-                price: venue.price,
+
+                type:
+                  venue.type,
+
+                price:
+                  venue.price,
+
                 availability:
                   venue.availability,
+
                 modelUrl:
                   venue.modelUrl,
+
                 layoutData:
                   JSON.stringify(
                     sceneData
                   ),
-              }
-            ),
+              }),
           }
         );
 
@@ -1887,6 +2788,10 @@ export default function Home() {
     );
   }
 
+  /* =======================================================
+     ERROR
+  ======================================================= */
+
   if (error) {
     return (
       <div className="loading">
@@ -1895,6 +2800,10 @@ export default function Home() {
     );
   }
 
+  /* =======================================================
+     SELECTED ITEM
+  ======================================================= */
+
   const selected =
     items.find(
       item =>
@@ -1902,12 +2811,20 @@ export default function Home() {
         selectedId
     );
 
+  /* =======================================================
+     MEASUREMENT START
+  ======================================================= */
+
   const measurementStart =
     items.find(
       item =>
         item.id ===
         measurementStartId
     );
+
+  /* =======================================================
+     MEASUREMENT END
+  ======================================================= */
 
   const measurementEnd =
     items.find(
@@ -1919,55 +2836,96 @@ export default function Home() {
   return (
     <>
       <div className="editor">
+
+        {/* =================================================
+            TOP BAR
+        ================================================= */}
+
         <TopBar
           venue={venue}
           saving={saving}
-          saveScene={saveScene}
-          viewMode={viewMode}
+          saveScene={
+            saveScene
+          }
+          viewMode={
+            viewMode
+          }
           setViewMode={
             setViewMode
           }
         />
 
         <div className="editor-body">
+
+          {/* =================================================
+              LEFT NAVIGATION
+          ================================================= */}
+
           <LeftNav
-            active={activeNav}
+            active={
+              activeNav
+            }
             setActive={
               setActiveNav
             }
           />
 
+          {/* =================================================
+              BUILD PANEL
+          ================================================= */}
+
           {activeNav ===
             "Build" && (
             <BuildPanel
-              addItem={addItem}
+              addItem={
+                addItem
+              }
+
               measureMode={
                 measureMode
               }
+
               startMeasurement={
                 startMeasurement
+              }
+
+              inventory={
+                inventory
+              }
+
+              inventoryLoading={
+                inventoryLoading
               }
             />
           )}
 
+          {/* =================================================
+              WORKSPACE
+          ================================================= */}
+
           <div className="workspace">
+
             <Canvas
               shadows={
                 viewMode ===
                 "3D"
               }
+
               camera={{
                 position: [
                   8,
                   8,
                   8,
                 ],
+
                 fov: 45,
               }}
             >
+
               {/* =================================================
                   2D CAMERA
               ================================================= */}
+
               {viewMode ===
                 "2D" && (
                 <OrthographicCamera
@@ -1987,7 +2945,10 @@ export default function Home() {
                 />
               )}
 
-              {/* FLOOR */}
+              {/* =================================================
+                  FLOOR
+              ================================================= */}
+
               <Floor
                 onClear={() => {
                   if (
@@ -2012,37 +2973,45 @@ export default function Home() {
                       key={
                         item.id
                       }
+
                       item={
                         item
                       }
+
                       selected={
                         selectedId ===
                         item.id
                       }
+
                       measureMode={
                         measureMode
                       }
+
                       measureSelected={
                         measurementStartId ===
                           item.id ||
                         measurementEndId ===
                           item.id
                       }
+
                       onSelect={() =>
                         setSelectedId(
                           item.id
                         )
                       }
+
                       onMeasureSelect={() =>
                         selectMeasurementItem(
                           item.id
                         )
                       }
-                      onMove={position =>
-                        moveItem(
-                          item.id,
-                          position
-                        )
+
+                      onMove={
+                        position =>
+                          moveItem(
+                            item.id,
+                            position
+                          )
                       }
                     />
                   ) : (
@@ -2050,56 +3019,71 @@ export default function Home() {
                       key={
                         item.id
                       }
+
                       item={
                         item
                       }
+
                       selected={
                         selectedId ===
                         item.id
                       }
+
                       measureMode={
                         measureMode
                       }
+
                       measureSelected={
                         measurementStartId ===
                           item.id ||
                         measurementEndId ===
                           item.id
                       }
+
                       onSelect={() =>
                         setSelectedId(
                           item.id
                         )
                       }
+
                       onMeasureSelect={() =>
                         selectMeasurementItem(
                           item.id
                         )
                       }
-                      onMove={position =>
-                        moveItem(
-                          item.id,
-                          position
-                        )
+
+                      onMove={
+                        position =>
+                          moveItem(
+                            item.id,
+                            position
+                          )
                       }
                     />
                   )
               )}
 
-              {/* MEASUREMENT */}
+              {/* =================================================
+                  MEASUREMENT
+              ================================================= */}
+
               {measurementStart &&
                 measurementEnd && (
-                  <Measurement
-                    start={
-                      measurementStart
-                    }
-                    end={
-                      measurementEnd
-                    }
-                  />
-                )}
+                <Measurement
+                  start={
+                    measurementStart
+                  }
 
-              {/* LIGHTING */}
+                  end={
+                    measurementEnd
+                  }
+                />
+              )}
+
+              {/* =================================================
+                  LIGHTING
+              ================================================= */}
+
               <ambientLight
                 intensity={
                   viewMode ===
@@ -2136,18 +3120,26 @@ export default function Home() {
                 intensity={0.5}
               />
 
-              {/* CAMERA CONTROLS */}
+              {/* =================================================
+                  CAMERA CONTROLS
+              ================================================= */}
+
               <OrbitControls
                 makeDefault
+
                 enableRotate={
                   viewMode ===
                   "3D"
                 }
+
                 enablePan={
                   true
                 }
+
                 minDistance={3}
+
                 maxDistance={18}
+
                 maxPolarAngle={
                   Math.PI /
                   2.05
@@ -2196,28 +3188,38 @@ export default function Home() {
               </div>
             )}
 
-            {/* BOTTOM TOOLBAR */}
+            {/* =================================================
+                BOTTOM TOOLBAR
+            ================================================= */}
+
             <BottomToolbar
               startMeasurement={
                 startMeasurement
               }
+
               measureMode={
                 measureMode
               }
+
               clearMeasurement={
                 clearMeasurement
               }
             />
           </div>
 
-          {/* PROPERTIES */}
+          {/* =================================================
+              PROPERTIES
+          ================================================= */}
+
           <PropertiesPanel
             selected={
               selected
             }
+
             deleteSelected={
               deleteSelected
             }
+
             rotateSelected={
               rotateSelected
             }
@@ -2226,7 +3228,7 @@ export default function Home() {
       </div>
 
       {/* =====================================================
-          CSS
+          GLOBAL STYLES
       ===================================================== */}
 
       <style jsx global>{`
@@ -2234,26 +3236,30 @@ export default function Home() {
           box-sizing: border-box;
         }
 
+        html,
         body {
           margin: 0;
           padding: 0;
+          width: 100%;
+          height: 100%;
           overflow: hidden;
           font-family:
-            Inter,
             Arial,
             sans-serif;
-          color: #1f2937;
-          background: #f1f2f4;
         }
 
         button {
-          font-family: inherit;
+          font-family:
+            inherit;
         }
 
         .editor {
           width: 100vw;
           height: 100vh;
-          background: #f1f2f4;
+          display: flex;
+          flex-direction: column;
+          background: #f3f4f6;
+          color: #374151;
         }
 
         /* =====================================================
@@ -2262,48 +3268,45 @@ export default function Home() {
 
         .topbar {
           height: 68px;
-          background: white;
-          border-bottom: 1px solid #dfe2e6;
+          flex-shrink: 0;
           display: flex;
           align-items: center;
           justify-content: space-between;
           padding: 0 20px;
-          position: relative;
-          z-index: 50;
-          box-shadow:
-            0 1px 4px
-            rgba(0, 0, 0, 0.06);
+          background: white;
+          border-bottom: 1px solid #dfe2e6;
+          z-index: 30;
         }
 
         .brand {
           display: flex;
           align-items: center;
           gap: 10px;
-          min-width: 250px;
+          min-width: 230px;
         }
 
         .brand-icon {
-          width: 34px;
-          height: 34px;
-          border-radius: 9px;
+          width: 36px;
+          height: 36px;
+          border-radius: 8px;
           background: #2563eb;
           color: white;
           display: flex;
           align-items: center;
           justify-content: center;
+          font-size: 18px;
           font-weight: 900;
-          font-size: 17px;
         }
 
         .brand-title {
           font-size: 15px;
-          font-weight: 800;
-          color: #273444;
+          font-weight: 900;
+          color: #1f2937;
         }
 
         .brand-subtitle {
           font-size: 10px;
-          color: #8b95a1;
+          color: #8993a0;
           margin-top: 2px;
         }
 
@@ -2312,87 +3315,82 @@ export default function Home() {
         }
 
         .project-small {
-          font-size: 9px;
+          font-size: 8px;
           color: #9ca3af;
+          font-weight: 800;
           letter-spacing: 1px;
-          font-weight: 700;
         }
 
         .project-name {
-          font-size: 17px;
+          font-size: 13px;
           font-weight: 800;
           color: #374151;
-          margin-top: 2px;
+          margin-top: 3px;
         }
 
         .top-actions {
-          min-width: 330px;
+          min-width: 230px;
           display: flex;
-          justify-content: flex-end;
           align-items: center;
-          gap: 12px;
+          justify-content: flex-end;
+          gap: 10px;
         }
 
         .saved-status {
+          font-size: 10px;
           color: #16a34a;
-          font-size: 12px;
           font-weight: 700;
         }
 
         .save-button {
-          border: none;
-          background: #2563eb;
-          color: white;
+          border: 1px solid #bfdbfe;
+          background: #eff6ff;
+          color: #1d4ed8;
           border-radius: 7px;
-          padding: 10px 16px;
+          padding: 8px 12px;
           cursor: pointer;
+          font-size: 11px;
           font-weight: 800;
-          box-shadow:
-            0 2px 5px
-            rgba(
-              37,
-              99,
-              235,
-              0.25
-            );
         }
 
         .save-button:hover {
-          background: #1d4ed8;
+          background: #dbeafe;
         }
 
         .view-toggle {
           display: flex;
-          border: 1px solid #d1d5db;
-          border-radius: 8px;
+          border: 1px solid #d7dce2;
+          border-radius: 7px;
           overflow: hidden;
-          background: #f9fafb;
         }
 
         .view-toggle button {
           border: none;
-          background: transparent;
-          padding: 9px 15px;
+          background: white;
+          padding: 7px 11px;
           cursor: pointer;
+          font-size: 10px;
           font-weight: 800;
           color: #6b7280;
         }
 
-        .view-toggle
-          .view-active {
+        .view-toggle button + button {
+          border-left: 1px solid #d7dce2;
+        }
+
+        .view-toggle .view-active {
           background: #2563eb;
           color: white;
         }
 
         /* =====================================================
-           BODY
+           EDITOR BODY
         ===================================================== */
 
         .editor-body {
+          flex: 1;
+          min-height: 0;
           display: flex;
-          height: calc(
-            100vh - 68px
-          );
         }
 
         /* =====================================================
@@ -2400,43 +3398,40 @@ export default function Home() {
         ===================================================== */
 
         .left-nav {
-          width: 76px;
-          background: white;
+          width: 72px;
+          flex-shrink: 0;
+          background: #ffffff;
           border-right: 1px solid #dfe2e6;
-          padding: 12px 7px;
           display: flex;
           flex-direction: column;
-          gap: 6px;
-          z-index: 30;
+          padding: 10px 7px;
+          z-index: 25;
         }
 
         .nav-item {
+          width: 100%;
           border: none;
           background: transparent;
-          border-radius: 8px;
-          min-height: 64px;
+          border-radius: 7px;
+          padding: 10px 4px;
           display: flex;
           flex-direction: column;
           align-items: center;
-          justify-content: center;
-          gap: 5px;
-          color: #596574;
-          font-size: 10px;
-          font-weight: 700;
+          gap: 4px;
+          color: #697586;
           cursor: pointer;
+          font-size: 9px;
+          font-weight: 700;
+        }
+
+        .nav-item:hover,
+        .nav-item.active {
+          background: #eff6ff;
+          color: #2563eb;
         }
 
         .nav-icon {
-          font-size: 18px;
-        }
-
-        .nav-item:hover {
-          background: #f3f4f6;
-        }
-
-        .nav-item.active {
-          background: #e8f1ff;
-          color: #2563eb;
+          font-size: 17px;
         }
 
         .nav-spacer {
@@ -2449,40 +3444,36 @@ export default function Home() {
 
         .build-panel {
           width: 285px;
-          background: white;
+          flex-shrink: 0;
+          background: #ffffff;
           border-right: 1px solid #dfe2e6;
+          overflow-y: auto;
           z-index: 25;
-          box-shadow:
-            2px 0 7px
-            rgba(0, 0, 0, 0.04);
         }
 
         .panel-heading {
-          font-size: 21px;
-          font-weight: 800;
-          padding: 23px 20px 18px;
+          padding: 18px 20px;
           border-bottom: 1px solid #edf0f2;
+          font-size: 17px;
+          font-weight: 900;
+          color: #374151;
         }
 
         .panel-content {
-          padding: 20px;
-          overflow-y: auto;
-          height: calc(
-            100% - 67px
-          );
+          padding: 18px;
         }
 
         .section-title {
-          font-size: 13px;
-          color: #667281;
-          font-weight: 800;
-          margin-bottom: 11px;
+          font-size: 11px;
           text-transform: uppercase;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.7px;
+          color: #7b8490;
+          font-weight: 900;
+          margin-bottom: 11px;
         }
 
         .section-title.second {
-          margin-top: 28px;
+          margin-top: 23px;
         }
 
         .element-list {
@@ -2493,27 +3484,34 @@ export default function Home() {
 
         .element-button {
           width: 100%;
-          border: 1px solid #e2e5e9;
-          background: #f8f9fa;
+          border: 1px solid #d7dce2;
+          background: white;
           border-radius: 8px;
-          padding: 12px 13px;
+          padding: 10px;
           display: flex;
           align-items: center;
-          gap: 13px;
-          font-size: 13px;
-          font-weight: 700;
+          gap: 10px;
           color: #374151;
+          font-weight: 700;
           cursor: pointer;
           text-align: left;
-          transition: 0.15s;
+          transition: 0.15s ease;
         }
 
         .element-button:hover {
           border-color: #93c5fd;
           background: #eff6ff;
-          transform: translateX(
-            2px
-          );
+          transform: translateX(2px);
+        }
+
+        .element-button:disabled {
+          cursor: not-allowed;
+          transform: none;
+        }
+
+        .element-button:disabled:hover {
+          border-color: #d7dce2;
+          background: white;
         }
 
         .element-icon {
@@ -2653,6 +3651,7 @@ export default function Home() {
 
         .properties-panel {
           width: 270px;
+          flex-shrink: 0;
           background: white;
           border-left: 1px solid #dfe2e6;
           padding: 20px;
@@ -2923,8 +3922,15 @@ export default function Home() {
 }
 
 /* =========================================================
-   PRELOAD ALL GLB MODELS
+   PRELOAD DEFAULT GLB MODELS
 ========================================================= */
+
+/*
+   These are only fallbacks for old objects.
+
+   Inventory models are loaded dynamically
+   using their database modelUrl.
+*/
 
 useGLTF.preload(
   "/models/SheenChair.glb"
