@@ -13,3 +13,24 @@ model Venue {
   createdAt    TimestamptzString @default(now())
   updatedAt    temporal.updatedAtString()
 }
+
+model InventoryItem {
+  id                Int      @id @default(autoincrement())
+  name              String
+  category          String
+
+  modelUrl          String
+  imageUrl          String?
+
+  width             Float
+  depth             Float
+  height            Float
+
+  quantity          Int
+  availableQuantity Int
+
+  price             Float
+
+  createdAt         TimestamptzString @default(now())
+  updatedAt         temporal.updatedAtString()
+}
