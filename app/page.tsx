@@ -1187,6 +1187,67 @@ function TopBar({
           </div>
         </div>
       </div>
+      <nav
+  style={{
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+  }}
+>
+  <a
+    href="/"
+    style={{
+      textDecoration: "none",
+      padding: "10px 14px",
+      borderRadius: "8px",
+      color: "#2563eb",
+      fontWeight: "600",
+    }}
+  >
+    Designer
+  </a>
+
+  <a
+    href="/venues"
+    style={{
+      textDecoration: "none",
+      padding: "10px 14px",
+      borderRadius: "8px",
+      color: "#334155",
+      fontWeight: "600",
+    }}
+  >
+    Venues
+  </a>
+
+  <a
+    href="/inventory"
+    style={{
+      textDecoration: "none",
+      padding: "10px 14px",
+      borderRadius: "8px",
+      color: "#334155",
+      fontWeight: "600",
+    }}
+  >
+    Inventory
+  </a>
+
+  <a
+    href="/match"
+    style={{
+      textDecoration: "none",
+      padding: "10px 14px",
+      borderRadius: "8px",
+      background: "#2563eb",
+      color: "white",
+      fontWeight: "600",
+    }}
+  >
+    Find Matches
+  </a>
+</nav>
+
 
       <div className="project-title">
         <div className="project-small">

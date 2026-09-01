@@ -14,19 +14,30 @@ type InventoryInput = {
   price: number;
 };
 
-
 // GET - Get all inventory items
 export async function GET() {
   try {
-    const items = await db.orm.public.InventoryItem.all();
+    const items =
+      await db.orm.public.InventoryItem.all();
 
-    return NextResponse.json(items);
+    return NextResponse.json(items, {
+      status: 200,
+    });
   } catch (error) {
-    console.error("Inventory GET error:", error);
+    console.error(
+      "Inventory GET error:",
+      error
+    );
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unknown database error";
 
     return NextResponse.json(
       {
         error: "Failed to fetch inventory",
+        details: message,
       },
       {
         status: 500,
@@ -35,20 +46,23 @@ export async function GET() {
   }
 }
 
-
 // POST - Add one or multiple inventory items
-export async function POST(request: Request) {
+export async function POST(
+  request: Request
+) {
   try {
     const body = await request.json();
 
-    const items: InventoryInput[] = Array.isArray(body)
-      ? body
-      : [body];
+    const items: InventoryInput[] =
+      Array.isArray(body)
+        ? body
+        : [body];
 
     if (items.length === 0) {
       return NextResponse.json(
         {
-          error: "No inventory items provided",
+          error:
+            "No inventory items provided",
         },
         {
           status: 400,
@@ -67,7 +81,7 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             error:
-              "name, category and modelUrl are required for every item",
+              "Name, category and modelUrl are required",
           },
           {
             status: 400,
@@ -103,7 +117,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
-        message: `${createdItems.length} inventory item(s) created successfully`,
+        message:
+          "Inventory item(s) created successfully",
         items: createdItems,
       },
       {
@@ -111,11 +126,21 @@ export async function POST(request: Request) {
       }
     );
   } catch (error) {
-    console.error("Inventory POST error:", error);
+    console.error(
+      "Inventory POST error:",
+      error
+    );
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unknown database error";
 
     return NextResponse.json(
       {
-        error: "Failed to create inventory item(s)",
+        error:
+          "Failed to create inventory item(s)",
+        details: message,
       },
       {
         status: 500,
@@ -123,17 +148,18 @@ export async function POST(request: Request) {
     );
   }
 }
-
 
 // PATCH - Update an inventory item
-export async function PATCH(request: Request) {
+export async function PATCH(
+  request: Request
+) {
   try {
     const body = await request.json();
 
     if (!body.id) {
       return NextResponse.json(
         {
-          error: "Item id is required",
+          error: "Item ID is required",
         },
         {
           status: 400,
@@ -141,63 +167,86 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const item = await db.orm.public.InventoryItem
-      .where({
-        id: Number(body.id),
-      })
-      .update({
-        ...(body.name !== undefined && {
-          name: body.name.trim(),
-        }),
+    const item =
+      await db.orm.public.InventoryItem
+        .where({
+          id: Number(body.id),
+        })
+        .update({
+          ...(body.name !== undefined && {
+            name: String(body.name).trim(),
+          }),
 
-        ...(body.category !== undefined && {
-          category: body.category.trim(),
-        }),
+          ...(body.category !== undefined && {
+            category: String(
+              body.category
+            ).trim(),
+          }),
 
-        ...(body.modelUrl !== undefined && {
-          modelUrl: body.modelUrl.trim(),
-        }),
+          ...(body.modelUrl !== undefined && {
+            modelUrl: String(
+              body.modelUrl
+            ).trim(),
+          }),
 
-        ...(body.imageUrl !== undefined && {
-          imageUrl: body.imageUrl
-            ? body.imageUrl.trim()
-            : null,
-        }),
+          ...(body.imageUrl !== undefined && {
+            imageUrl: body.imageUrl
+              ? String(
+                  body.imageUrl
+                ).trim()
+              : null,
+          }),
 
-        ...(body.width !== undefined && {
-          width: Number(body.width),
-        }),
+          ...(body.width !== undefined && {
+            width: Number(body.width),
+          }),
 
-        ...(body.depth !== undefined && {
-          depth: Number(body.depth),
-        }),
+          ...(body.depth !== undefined && {
+            depth: Number(body.depth),
+          }),
 
-        ...(body.height !== undefined && {
-          height: Number(body.height),
-        }),
+          ...(body.height !== undefined && {
+            height: Number(body.height),
+          }),
 
-        ...(body.quantity !== undefined && {
-          quantity: Number(body.quantity),
-        }),
+          ...(body.quantity !== undefined && {
+            quantity: Number(body.quantity),
+          }),
 
-        ...(body.availableQuantity !== undefined && {
-          availableQuantity: Number(
-            body.availableQuantity
-          ),
-        }),
+          ...(body.availableQuantity !==
+            undefined && {
+            availableQuantity: Number(
+              body.availableQuantity
+            ),
+          }),
 
-        ...(body.price !== undefined && {
-          price: Number(body.price),
-        }),
-      });
+          ...(body.price !== undefined && {
+            price: Number(body.price),
+          }),
+        });
 
-    return NextResponse.json(item);
+    return NextResponse.json(
+      item,
+      {
+        status: 200,
+      }
+    );
   } catch (error) {
-    console.error("Inventory PATCH error:", error);
+    console.error(
+      "Inventory PATCH error:",
+      error
+    );
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unknown database error";
 
     return NextResponse.json(
       {
-        error: "Failed to update inventory item",
+        error:
+          "Failed to update inventory item",
+        details: message,
       },
       {
         status: 500,
@@ -206,16 +255,17 @@ export async function PATCH(request: Request) {
   }
 }
 
-
 // DELETE - Delete an inventory item
-export async function DELETE(request: Request) {
+export async function DELETE(
+  request: Request
+) {
   try {
     const body = await request.json();
 
     if (!body.id) {
       return NextResponse.json(
         {
-          error: "Item id is required",
+          error: "Item ID is required",
         },
         {
           status: 400,
@@ -223,19 +273,39 @@ export async function DELETE(request: Request) {
       );
     }
 
-    const item = await db.orm.public.InventoryItem
-      .where({
-        id: Number(body.id),
-      })
-      .delete();
-
-    return NextResponse.json(item);
-  } catch (error) {
-    console.error("Inventory DELETE error:", error);
+    const item =
+      await db.orm.public.InventoryItem
+        .where({
+          id: Number(body.id),
+        })
+        .delete();
 
     return NextResponse.json(
       {
-        error: "Failed to delete inventory item",
+        message:
+          "Inventory item deleted successfully",
+        item,
+      },
+      {
+        status: 200,
+      }
+    );
+  } catch (error) {
+    console.error(
+      "Inventory DELETE error:",
+      error
+    );
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unknown database error";
+
+    return NextResponse.json(
+      {
+        error:
+          "Failed to delete inventory item",
+        details: message,
       },
       {
         status: 500,

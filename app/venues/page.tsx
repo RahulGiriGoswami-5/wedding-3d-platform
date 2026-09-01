@@ -1,19 +1,7 @@
 "use client";
 
-import { Canvas, ThreeEvent } from "@react-three/fiber";
-import {
-  Grid,
-  OrbitControls,
-  useGLTF,
-} from "@react-three/drei";
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import type { CSSProperties } from "react";
-import * as THREE from "three";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type Venue = {
   id: number;
@@ -23,1359 +11,568 @@ type Venue = {
   type: string;
   price: number;
   availability: boolean;
-  modelUrl: string | null;
-  layoutData: string | null;
+  modelUrl?: string | null;
 };
 
-type ElementType =
-  | "chair"
-  | "table"
-  | "sofa"
-  | "stage"
-  | "flowers"
-  | "lamp";
-
-type FurnitureItem = {
-  id: number;
-  type: ElementType;
-  position: [number, number, number];
-  rotation: number;
-};
-
-type SavedScene = {
-  items: FurnitureItem[];
-};
-
-const REAL_DIMENSIONS: Record<
-  ElementType,
-  [number, number, number]
-> = {
-  chair: [0.5, 0.5, 0.9],
-  table: [1.5, 1.5, 0.75],
-  sofa: [2.0, 0.85, 0.85],
-  stage: [4.0, 3.0, 0.3],
-  flowers: [0.4, 0.4, 0.6],
-  lamp: [0.4, 0.4, 1.2],
-};
-
-const MODEL_PATHS: Record<ElementType, string> = {
-  chair: "/models/SheenChair.glb",
-  table: "/models/RoundTable.glb",
-  sofa: "/models/Sofa.glb",
-  stage: "/models/Stage.glb",
-  flowers: "/models/Flowers.glb",
-  lamp: "/models/Lamp.glb",
-};
-
-const ELEMENT_NAMES: Record<ElementType, string> = {
-  chair: "Chair",
-  table: "Table",
-  sofa: "Sofa",
-  stage: "Stage",
-  flowers: "Flowers",
-  lamp: "Lamp",
-};
-
-const ELEMENT_ICONS: Record<ElementType, string> = {
-  chair: "🪑",
-  table: "🍽️",
-  sofa: "🛋️",
-  stage: "🎭",
-  flowers: "💐",
-  lamp: "💡",
-};
-
-function getModelScale(
-  scene: THREE.Object3D,
-  type: ElementType
-) {
-  const clone = scene.clone(true);
-
-  const box = new THREE.Box3().setFromObject(
-    clone
-  );
-
-  const size = new THREE.Vector3();
-
-  box.getSize(size);
-
-  const target = REAL_DIMENSIONS[type];
-
-  const xScale =
-    size.x > 0
-      ? target[0] / size.x
-      : 1;
-
-  const yScale =
-    size.y > 0
-      ? target[1] / size.y
-      : 1;
-
-  const zScale =
-    size.z > 0
-      ? target[2] / size.z
-      : 1;
-
-  return Math.min(
-    xScale,
-    yScale,
-    zScale
-  );
-}
-
-function Furniture({
-  item,
-  selected,
-  onSelect,
-  onMove,
-  onFinishMove,
-}: {
-  item: FurnitureItem;
-  selected: boolean;
-  onSelect: () => void;
-  onMove: (
-    position: [number, number, number]
-  ) => void;
-  onFinishMove: () => void;
-}) {
-  const { scene } = useGLTF(
-    MODEL_PATHS[item.type]
-  );
-
-  const pointerDown = useRef(false);
-
-  const scale = useMemo(() => {
-    return getModelScale(
-      scene,
-      item.type
-    );
-  }, [scene, item.type]);
-
-  function handlePointerDown(
-    e: ThreeEvent<PointerEvent>
-  ) {
-    e.stopPropagation();
-
-    pointerDown.current = true;
-
-    onSelect();
-  }
-
-  function handlePointerMove(
-    e: ThreeEvent<PointerEvent>
-  ) {
-    if (!pointerDown.current) {
-      return;
-    }
-
-    e.stopPropagation();
-
-    const plane = new THREE.Plane(
-      new THREE.Vector3(0, 1, 0),
-      0
-    );
-
-    const point = new THREE.Vector3();
-
-    const intersection =
-      e.ray.intersectPlane(
-        plane,
-        point
-      );
-
-    if (!intersection) {
-      return;
-    }
-
-    onMove([
-      THREE.MathUtils.clamp(
-        point.x,
-        -5.5,
-        5.5
-      ),
-      0,
-      THREE.MathUtils.clamp(
-        point.z,
-        -5.5,
-        5.5
-      ),
-    ]);
-  }
-
-  function handlePointerUp(
-    e: ThreeEvent<PointerEvent>
-  ) {
-    e.stopPropagation();
-
-    pointerDown.current = false;
-
-    onFinishMove();
-  }
-
-  function handlePointerLeave() {
-    if (!pointerDown.current) {
-      return;
-    }
-
-    pointerDown.current = false;
-
-    onFinishMove();
-  }
-
-  return (
-    <group
-      position={item.position}
-      rotation={[0, item.rotation, 0]}
-    >
-      <primitive
-        object={scene.clone(true)}
-        scale={scale}
-        onPointerDown={
-          handlePointerDown
-        }
-        onPointerMove={
-          handlePointerMove
-        }
-        onPointerUp={
-          handlePointerUp
-        }
-        onPointerLeave={
-          handlePointerLeave
-        }
-      />
-
-      {selected && (
-        <mesh
-          position={[0, 0.02, 0]}
-          rotation={[
-            -Math.PI / 2,
-            0,
-            0,
-          ]}
-        >
-          <ringGeometry
-            args={[0.45, 0.52, 32]}
-          />
-
-          <meshBasicMaterial
-            color="#2563eb"
-            transparent
-            opacity={0.8}
-          />
-        </mesh>
-      )}
-    </group>
-  );
-}
-
-function VenueModel({
-  modelUrl,
-}: {
-  modelUrl: string;
-}) {
-  const { scene } = useGLTF(modelUrl);
-
-  return (
-    <primitive
-      object={scene.clone(true)}
-      position={[0, 0, 0]}
-    />
-  );
-}
-
-function Floor({
-  onClearSelection,
-}: {
-  onClearSelection: () => void;
-}) {
-  return (
-    <>
-      <mesh
-        rotation={[
-          -Math.PI / 2,
-          0,
-          0,
-        ]}
-        onPointerDown={
-          onClearSelection
-        }
-      >
-        <planeGeometry
-          args={[12, 12]}
-        />
-
-        <meshStandardMaterial
-          color="#f8fafc"
-        />
-      </mesh>
-
-      <Grid
-        args={[12, 12]}
-        cellSize={0.5}
-        cellThickness={0.5}
-        cellColor="#cbd5e1"
-        sectionSize={1}
-        sectionThickness={1}
-        sectionColor="#94a3b8"
-        fadeDistance={20}
-        fadeStrength={1}
-        infiniteGrid={false}
-        position={[0, 0.01, 0]}
-      />
-    </>
-  );
-}
-
-function EditorScene({
-  venue,
-  items,
-  selectedId,
-  setSelectedId,
-  updateItemPosition,
-  finishMove,
-}: {
-  venue: Venue | null;
-  items: FurnitureItem[];
-  selectedId: number | null;
-  setSelectedId: (
-    id: number | null
-  ) => void;
-  updateItemPosition: (
-    id: number,
-    position: [number, number, number]
-  ) => void;
-  finishMove: () => void;
-}) {
-  return (
-    <>
-      <Floor
-        onClearSelection={() =>
-          setSelectedId(null)
-        }
-      />
-
-      {venue?.modelUrl && (
-        <VenueModel
-          modelUrl={venue.modelUrl}
-        />
-      )}
-
-      {items.map((item) => (
-        <Furniture
-          key={item.id}
-          item={item}
-          selected={
-            selectedId === item.id
-          }
-          onSelect={() =>
-            setSelectedId(item.id)
-          }
-          onMove={(position) =>
-            updateItemPosition(
-              item.id,
-              position
-            )
-          }
-          onFinishMove={
-            finishMove
-          }
-        />
-      ))}
-
-      <ambientLight intensity={1.2} />
-
-      <directionalLight
-        position={[5, 8, 5]}
-        intensity={2}
-        castShadow
-      />
-
-      <directionalLight
-        position={[-5, 5, -5]}
-        intensity={0.5}
-      />
-
-      <OrbitControls
-        makeDefault
-        minDistance={3}
-        maxDistance={18}
-        maxPolarAngle={
-          Math.PI / 2.05
-        }
-      />
-    </>
-  );
-}
-
-function InfoRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent:
-          "space-between",
-        gap: "10px",
-        marginBottom: "8px",
-        fontSize: "12px",
-      }}
-    >
-      <span
-        style={{
-          color: "#64748b",
-        }}
-      >
-        {label}
-      </span>
-
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-const sectionTitle: CSSProperties = {
-  margin: "0 0 12px",
-  fontSize: "14px",
-  color: "#1e293b",
-};
-
-function Toolbar({
-  venue,
-  items,
-  selectedId,
-  addItem,
-  deleteSelected,
-  saveScene,
-  saving,
-}: {
-  venue: Venue | null;
-  items: FurnitureItem[];
-  selectedId: number | null;
-  addItem: (
-    type: ElementType
-  ) => void;
-  deleteSelected: () => void;
-  saveScene: () => void;
-  saving: boolean;
-}) {
-  const selected = items.find(
-    (item) =>
-      item.id === selectedId
-  );
-
-  return (
-    <aside
-      style={{
-        position: "fixed",
-        top: 0,
-        right: 0,
-        width: "310px",
-        height: "100vh",
-        background: "#ffffff",
-        borderLeft:
-          "1px solid #dbeafe",
-        boxShadow:
-          "-5px 0 20px rgba(37,99,235,0.08)",
-        zIndex: 20,
-        padding: "22px",
-        boxSizing: "border-box",
-        overflowY: "auto",
-        fontFamily:
-          "Arial, sans-serif",
-      }}
-    >
-      <div
-        style={{
-          marginBottom: "24px",
-        }}
-      >
-        <div
-          style={{
-            fontSize: "11px",
-            color: "#2563eb",
-            fontWeight: 700,
-            letterSpacing: "1px",
-            marginBottom: "6px",
-          }}
-        >
-          3D VENUE PLANNER
-        </div>
-
-        <h1
-          style={{
-            margin: 0,
-            fontSize: "23px",
-            color: "#1e293b",
-          }}
-        >
-          {venue
-            ? venue.name
-            : "Wedding Editor"}
-        </h1>
-
-        {venue && (
-          <p
-            style={{
-              margin: "6px 0 0",
-              color: "#64748b",
-              fontSize: "13px",
-            }}
-          >
-            📍 {venue.location}
-          </p>
-        )}
-      </div>
-
-      <section>
-        <h3 style={sectionTitle}>
-          Add Elements
-        </h3>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns:
-              "1fr 1fr",
-            gap: "8px",
-          }}
-        >
-          {(
-            Object.keys(
-              ELEMENT_NAMES
-            ) as ElementType[]
-          ).map((type) => (
-            <button
-              key={type}
-              onClick={() =>
-                addItem(type)
-              }
-              style={{
-                padding: "12px 6px",
-                border:
-                  "1px solid #bfdbfe",
-                background: "#eff6ff",
-                borderRadius: "9px",
-                cursor: "pointer",
-                color: "#1e3a8a",
-                fontWeight: 600,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "20px",
-                  marginBottom: "4px",
-                }}
-              >
-                {ELEMENT_ICONS[type]}
-              </div>
-
-              <div
-                style={{
-                  fontSize: "12px",
-                }}
-              >
-                {ELEMENT_NAMES[type]}
-              </div>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section
-        style={{
-          marginTop: "24px",
-        }}
-      >
-        <h3 style={sectionTitle}>
-          Selected Element
-        </h3>
-
-        {selected ? (
-          <div
-            style={{
-              background: "#eff6ff",
-              border:
-                "1px solid #bfdbfe",
-              borderRadius: "10px",
-              padding: "14px",
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 700,
-                marginBottom: "12px",
-                color: "#1e3a8a",
-              }}
-            >
-              {
-                ELEMENT_ICONS[
-                  selected.type
-                ]
-              }{" "}
-              {
-                ELEMENT_NAMES[
-                  selected.type
-                ]
-              }
-            </div>
-
-            <InfoRow
-              label="Width"
-              value={`${REAL_DIMENSIONS[
-                selected.type
-              ][0].toFixed(2)} m`}
-            />
-
-            <InfoRow
-              label="Depth"
-              value={`${REAL_DIMENSIONS[
-                selected.type
-              ][1].toFixed(2)} m`}
-            />
-
-            <InfoRow
-              label="Height"
-              value={`${REAL_DIMENSIONS[
-                selected.type
-              ][2].toFixed(2)} m`}
-            />
-
-            <div
-              style={{
-                borderTop:
-                  "1px solid #bfdbfe",
-                margin: "12px 0",
-              }}
-            />
-
-            <InfoRow
-              label="X Position"
-              value={`${selected.position[
-                0
-              ].toFixed(2)} m`}
-            />
-
-            <InfoRow
-              label="Z Position"
-              value={`${selected.position[
-                2
-              ].toFixed(2)} m`}
-            />
-
-            <InfoRow
-              label="Rotation"
-              value={`${Math.round(
-                THREE.MathUtils.radToDeg(
-                  selected.rotation
-                )
-              )}°`}
-            />
-          </div>
-        ) : (
-          <div
-            style={{
-              padding: "16px",
-              background: "#f8fafc",
-              borderRadius: "9px",
-              color: "#64748b",
-              fontSize: "13px",
-              textAlign: "center",
-              border:
-                "1px solid #e2e8f0",
-            }}
-          >
-            Select an element in the
-            venue.
-          </div>
-        )}
-      </section>
-
-      <section
-        style={{
-          marginTop: "24px",
-        }}
-      >
-        <h3 style={sectionTitle}>
-          Controls
-        </h3>
-
-        <div
-          style={{
-            fontSize: "13px",
-            color: "#64748b",
-            lineHeight: 1.9,
-          }}
-        >
-          🖱️ Drag — Move
-          <br />
-          ⌨️ R — Rotate
-          <br />
-          ⌨️ Arrow keys — Fine movement
-          <br />
-          ⌨️ Delete — Remove
-          <br />
-          🖱️ Scroll — Zoom
-          <br />
-          🖱️ Right drag — Camera
-        </div>
-      </section>
-
-      <section
-        style={{
-          marginTop: "24px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent:
-              "space-between",
-            marginBottom: "10px",
-          }}
-        >
-          <span
-            style={{
-              color: "#64748b",
-              fontSize: "13px",
-            }}
-          >
-            Total elements
-          </span>
-
-          <strong>
-            {items.length}
-          </strong>
-        </div>
-
-        <button
-          onClick={deleteSelected}
-          disabled={
-            selectedId === null
-          }
-          style={{
-            width: "100%",
-            padding: "11px",
-            border:
-              "1px solid #ef4444",
-            borderRadius: "8px",
-            background:
-              selectedId === null
-                ? "#f1f5f9"
-                : "#ffffff",
-            color:
-              selectedId === null
-                ? "#94a3b8"
-                : "#dc2626",
-            cursor:
-              selectedId === null
-                ? "default"
-                : "pointer",
-            fontWeight: 600,
-          }}
-        >
-          🗑️ Delete Selected
-        </button>
-      </section>
-
-      <button
-        onClick={saveScene}
-        disabled={saving}
-        style={{
-          width: "100%",
-          marginTop: "24px",
-          padding: "14px",
-          background:
-            saving
-              ? "#93c5fd"
-              : "#2563eb",
-          color: "#ffffff",
-          border: "none",
-          borderRadius: "9px",
-          cursor:
-            saving
-              ? "default"
-              : "pointer",
-          fontWeight: 700,
-          fontSize: "14px",
-        }}
-      >
-        {saving
-          ? "Saving..."
-          : "💾 Save Design"}
-      </button>
-
-      <div
-        style={{
-          marginTop: "14px",
-          padding: "10px",
-          background: "#f8fafc",
-          borderRadius: "8px",
-          fontSize: "11px",
-          color: "#64748b",
-          textAlign: "center",
-        }}
-      >
-        Planning area: 12m × 12m
-      </div>
-    </aside>
-  );
-}
-
-export default function Home() {
-  const [venue, setVenue] =
-    useState<Venue | null>(null);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState("");
-
-  const [items, setItems] =
-    useState<FurnitureItem[]>([
-      {
-        id: 1,
-        type: "chair",
-        position: [0, 0, 0],
-        rotation: 0,
-      },
-    ]);
-
-  const [selectedId, setSelectedId] =
-    useState<number | null>(1);
-
-  const [saving, setSaving] =
-    useState(false);
-
-  useEffect(() => {
-    const params =
-      new URLSearchParams(
-        window.location.search
-      );
-
-    const venueIdParam =
-      params.get("venueId");
-
-    if (!venueIdParam) {
-      setLoading(false);
-      return;
-    }
-
-    const venueId =
-      Number(venueIdParam);
-
-    if (
-      !Number.isInteger(
-        venueId
-      ) ||
-      venueId <= 0
-    ) {
-      setError(
-        "Invalid venue ID"
-      );
-
-      setLoading(false);
-      return;
-    }
-
-    async function loadVenue() {
-      try {
-        const response =
-          await fetch(
-            `/api/venues?id=${venueId}`
-          );
-
-        if (!response.ok) {
-          throw new Error(
-            "Failed to load venue"
-          );
-        }
-
-        const data: Venue =
-          await response.json();
-
-        setVenue(data);
-
-        if (data.layoutData) {
-          try {
-            const saved =
-              JSON.parse(
-                data.layoutData
-              ) as Partial<SavedScene>;
-
-            if (
-              Array.isArray(
-                saved.items
-              )
-            ) {
-              const validItems =
-                saved.items.filter(
-                  (
-                    item
-                  ): item is FurnitureItem => {
-                    return (
-                      typeof item ===
-                        "object" &&
-                      item !== null &&
-                      Number.isInteger(
-                        item.id
-                      ) &&
-                      typeof item.type ===
-                        "string" &&
-                      item.type in
-                        MODEL_PATHS &&
-                      Array.isArray(
-                        item.position
-                      ) &&
-                      item.position.length ===
-                        3 &&
-                      typeof item.rotation ===
-                        "number"
-                    );
-                  }
-                );
-
-              if (
-                validItems.length > 0
-              ) {
-                setItems(validItems);
-
-                setSelectedId(
-                  validItems[0].id
-                );
-              }
-            }
-          } catch (
-            layoutError
-          ) {
-            console.error(
-              "Layout error:",
-              layoutError
-            );
-          }
-        }
-      } catch (loadError) {
-        console.error(
-          loadError
-        );
-
-        setError(
-          "Failed to load venue"
-        );
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadVenue();
-  }, []);
-
-  useEffect(() => {
-    function handleKeyDown(
-      e: KeyboardEvent
-    ) {
-      if (
-        selectedId === null
-      ) {
-        return;
-      }
-
-      if (
-        e.key.toLowerCase() ===
-        "r"
-      ) {
-        e.preventDefault();
-
-        setItems((current) =>
-          current.map((item) =>
-            item.id === selectedId
-              ? {
-                  ...item,
-                  rotation:
-                    item.rotation +
-                    Math.PI / 8,
-                }
-              : item
-          )
-        );
-
-        return;
-      }
-
-      if (
-        e.key === "Delete" ||
-        e.key === "Backspace"
-      ) {
-        e.preventDefault();
-
-        setItems((current) =>
-          current.filter(
-            (item) =>
-              item.id !==
-              selectedId
-          )
-        );
-
-        setSelectedId(null);
-
-        return;
-      }
-
-      const movement =
-        e.shiftKey
-          ? 0.1
-          : 0.05;
-
-      let dx = 0;
-      let dz = 0;
-
-      if (
-        e.key === "ArrowLeft"
-      ) {
-        dx = -movement;
-      }
-
-      if (
-        e.key === "ArrowRight"
-      ) {
-        dx = movement;
-      }
-
-      if (
-        e.key === "ArrowUp"
-      ) {
-        dz = -movement;
-      }
-
-      if (
-        e.key === "ArrowDown"
-      ) {
-        dz = movement;
-      }
-
-      if (
-        dx !== 0 ||
-        dz !== 0
-      ) {
-        e.preventDefault();
-
-        setItems((current) =>
-          current.map((item) => {
-            if (
-              item.id !==
-              selectedId
-            ) {
-              return item;
-            }
-
-            return {
-              ...item,
-              position: [
-                THREE.MathUtils.clamp(
-                  item.position[0] +
-                    dx,
-                  -5.5,
-                  5.5
-                ),
-                0,
-                THREE.MathUtils.clamp(
-                  item.position[2] +
-                    dz,
-                  -5.5,
-                  5.5
-                ),
-              ],
-            };
-          })
-        );
-      }
-    }
-
-    window.addEventListener(
-      "keydown",
-      handleKeyDown
-    );
-
-    return () => {
-      window.removeEventListener(
-        "keydown",
-        handleKeyDown
-      );
-    };
-  }, [selectedId]);
-
-  function addItem(
-    type: ElementType
-  ) {
-    const id = Date.now();
-
-    const offset =
-      ((items.length % 5) - 2) *
-      0.7;
-
-    const newItem: FurnitureItem = {
-      id,
-      type,
-      position: [
-        offset,
-        0,
-        offset,
-      ],
-      rotation: 0,
-    };
-
-    setItems((current) => [
-      ...current,
-      newItem,
-    ]);
-
-    setSelectedId(id);
-  }
-
-  function updateItemPosition(
-    id: number,
-    position: [
-      number,
-      number,
-      number
-    ]
-  ) {
-    setItems((current) =>
-      current.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              position,
-            }
-          : item
-      )
-    );
-  }
-
-  function deleteSelected() {
-    if (
-      selectedId === null
-    ) {
-      return;
-    }
-
-    setItems((current) =>
-      current.filter(
-        (item) =>
-          item.id !==
-          selectedId
-      )
-    );
-
-    setSelectedId(null);
-  }
-
-  async function saveScene() {
-    const sceneData: SavedScene = {
-      items,
-    };
-
-    if (!venue) {
-      localStorage.setItem(
-        "wedding-design-default",
-        JSON.stringify(
-          sceneData
-        )
-      );
-
-      alert("Design saved!");
-
-      return;
-    }
-
+export default function VenuesPage() {
+  const [venues, setVenues] = useState<Venue[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [showForm, setShowForm] = useState(false);
+
+  const [name, setName] = useState("");
+  const [location, setLocation] = useState("");
+  const [capacity, setCapacity] = useState("");
+  const [type, setType] = useState("Banquet Hall");
+  const [price, setPrice] = useState("");
+  const [availability, setAvailability] = useState(true);
+
+  async function loadVenues() {
     try {
-      setSaving(true);
+      setLoading(true);
+      setError("");
 
-      const response =
-        await fetch(
-          "/api/venues",
-          {
-            method: "PUT",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              id: venue.id,
-              layoutData:
-                JSON.stringify(
-                  sceneData
-                ),
-            }),
-          }
-        );
+      const response = await fetch("/api/venues", {
+        cache: "no-store",
+      });
 
       if (!response.ok) {
-        const data =
-          await response
-            .json()
-            .catch(() => null);
-
-        throw new Error(
-          data?.error ??
-            "Failed to save design"
-        );
+        throw new Error("Failed to load venues");
       }
 
-      alert(
-        `${venue.name} design saved!`
-      );
-    } catch (saveError) {
-      console.error(
-        saveError
-      );
+      const data = await response.json();
 
-      alert(
-        saveError instanceof Error
-          ? saveError.message
-          : "Failed to save design"
-      );
+      setVenues(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error(err);
+      setError("Could not load venues.");
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
   }
 
-  if (loading) {
-    return (
-      <main
-        style={{
-          width: "100vw",
-          height: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent:
-            "center",
-          fontFamily:
-            "Arial, sans-serif",
-        }}
-      >
-        Loading venue...
-      </main>
-    );
+  useEffect(() => {
+    loadVenues();
+  }, []);
+
+  function resetForm() {
+    setName("");
+    setLocation("");
+    setCapacity("");
+    setType("Banquet Hall");
+    setPrice("");
+    setAvailability(true);
   }
 
-  if (error) {
-    return (
-      <main
-        style={{
-          width: "100vw",
-          height: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent:
-            "center",
-          flexDirection:
-            "column",
-          gap: "12px",
-          fontFamily:
-            "Arial, sans-serif",
-        }}
-      >
-        <h2>{error}</h2>
+  async function addVenue(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
 
-        <button
-          onClick={() => {
-            window.location.href =
-              "/venues";
-          }}
-        >
-          Back to Venues
-        </button>
-      </main>
+    try {
+      const response = await fetch("/api/venues", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          location,
+          capacity: Number(capacity),
+          type,
+          price: Number(price),
+          availability,
+          modelUrl: null,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to add venue");
+      }
+
+      setShowForm(false);
+      resetForm();
+      await loadVenues();
+    } catch (err) {
+      console.error(err);
+      alert(
+        err instanceof Error
+          ? err.message
+          : "Failed to add venue"
+      );
+    }
+  }
+
+  async function deleteVenue(id: number) {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this venue?"
     );
+
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch("/api/venues", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to delete venue");
+      }
+
+      await loadVenues();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete venue");
+    }
+  }
+
+  function formatPrice(value: number) {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(value);
   }
 
   return (
-    <main
-      style={{
-        width: "100vw",
-        height: "100vh",
-        overflow: "hidden",
-        background: "#f8fafc",
-      }}
-    >
-      <div
-        style={{
-          width:
-            "calc(100vw - 310px)",
-          height: "100vh",
-        }}
-      >
-        <Canvas
-          shadows
-          camera={{
-            position: [
-              8,
-              8,
-              8,
-            ],
-            fov: 45,
-          }}
-          style={{
-            width: "100%",
-            height: "100%",
-          }}
-        >
-          <EditorScene
-            venue={venue}
-            items={items}
-            selectedId={selectedId}
-            setSelectedId={
-              setSelectedId
-            }
-            updateItemPosition={
-              updateItemPosition
-            }
-            finishMove={() => {}}
-          />
-        </Canvas>
-      </div>
+    <main className="min-h-screen bg-slate-50">
 
-      <Toolbar
-        venue={venue}
-        items={items}
-        selectedId={selectedId}
-        addItem={addItem}
-        deleteSelected={
-          deleteSelected
-        }
-        saveScene={saveScene}
-        saving={saving}
-      />
+      {/* NAVBAR */}
+      <nav className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+
+          <Link href="/" className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-blue-600 text-xl font-bold text-white">
+              W
+            </div>
+
+            <div>
+              <h1 className="font-bold text-slate-900">
+                Wedding Planner
+              </h1>
+
+              <p className="text-xs text-slate-500">
+                3D Venue Designer
+              </p>
+            </div>
+          </Link>
+
+          <div className="flex items-center gap-6">
+            <Link
+              href="/"
+              className="font-medium text-slate-600 hover:text-blue-600"
+            >
+              Designer
+            </Link>
+
+            <Link
+              href="/venues"
+              className="font-semibold text-blue-600"
+            >
+              Venues
+            </Link>
+          </div>
+
+          <button
+            onClick={() => setShowForm(true)}
+            className="rounded-lg bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-700"
+          >
+            + Add Venue
+          </button>
+
+        </div>
+      </nav>
+
+      {/* HEADER */}
+      <section className="border-b border-slate-200 bg-gradient-to-br from-blue-50 to-white">
+        <div className="mx-auto max-w-7xl px-6 py-16">
+
+          <p className="mb-3 font-semibold uppercase tracking-wider text-blue-600">
+            Wedding Venue Management
+          </p>
+
+          <h2 className="text-4xl font-bold text-slate-900">
+            Discover Your Perfect Wedding Venue
+          </h2>
+
+          <p className="mt-4 max-w-2xl text-lg text-slate-600">
+            Browse, manage and organize venues for your wedding events.
+            Compare capacity, location and pricing to find the ideal venue.
+          </p>
+
+          <div className="mt-7">
+            <button
+              onClick={() => setShowForm(true)}
+              className="rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700"
+            >
+              Add New Venue
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      {/* STATS */}
+      <section className="mx-auto grid max-w-7xl gap-5 px-6 py-10 md:grid-cols-3">
+
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-sm text-slate-500">
+            Total Venues
+          </p>
+
+          <p className="mt-2 text-3xl font-bold text-slate-900">
+            {venues.length}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-sm text-slate-500">
+            Available Venues
+          </p>
+
+          <p className="mt-2 text-3xl font-bold text-green-600">
+            {venues.filter((venue) => venue.availability).length}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-sm text-slate-500">
+            Maximum Capacity
+          </p>
+
+          <p className="mt-2 text-3xl font-bold text-blue-600">
+            {venues.length > 0
+              ? Math.max(...venues.map((venue) => venue.capacity))
+              : 0}
+          </p>
+        </div>
+
+      </section>
+
+      {/* VENUES */}
+      <section className="mx-auto max-w-7xl px-6 pb-16">
+
+        <div className="mb-8 flex items-center justify-between">
+
+          <div>
+            <h2 className="text-3xl font-bold text-slate-900">
+              Available Venues
+            </h2>
+
+            <p className="mt-2 text-slate-600">
+              Manage all your wedding venues in one place.
+            </p>
+          </div>
+
+          <button
+            onClick={loadVenues}
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 font-medium text-slate-700 hover:bg-slate-100"
+          >
+            Refresh
+          </button>
+
+        </div>
+
+        {loading && (
+          <div className="rounded-xl bg-white p-12 text-center shadow-sm">
+            <p className="text-lg text-slate-600">
+              Loading venues...
+            </p>
+          </div>
+        )}
+
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-5 text-red-600">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && venues.length === 0 && (
+          <div className="rounded-xl border-2 border-dashed border-slate-300 bg-white p-16 text-center">
+
+            <div className="text-5xl">🏛️</div>
+
+            <h3 className="mt-5 text-xl font-bold">
+              No venues found
+            </h3>
+
+            <p className="mt-2 text-slate-500">
+              Add your first wedding venue to get started.
+            </p>
+
+            <button
+              onClick={() => setShowForm(true)}
+              className="mt-6 rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700"
+            >
+              + Add Your First Venue
+            </button>
+
+          </div>
+        )}
+
+        {!loading && venues.length > 0 && (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+
+            {venues.map((venue) => (
+              <div
+                key={venue.id}
+                className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+              >
+
+                <div className="flex h-32 items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600 text-5xl">
+                  🏛️
+                </div>
+
+                <div className="p-6">
+
+                  <div className="flex items-start justify-between gap-3">
+
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900">
+                        {venue.name}
+                      </h3>
+
+                      <p className="mt-1 text-sm text-slate-500">
+                        📍 {venue.location}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        venue.availability
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-700"
+                      }`}
+                    >
+                      {venue.availability
+                        ? "Available"
+                        : "Unavailable"}
+                    </span>
+
+                  </div>
+
+                  <div className="mt-6 space-y-3 border-t pt-5">
+
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">
+                        Type
+                      </span>
+
+                      <span className="font-medium">
+                        {venue.type}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">
+                        Capacity
+                      </span>
+
+                      <span className="font-medium">
+                        {venue.capacity} guests
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">
+                        Price
+                      </span>
+
+                      <span className="font-bold text-blue-600">
+                        {formatPrice(venue.price)}
+                      </span>
+                    </div>
+
+                  </div>
+
+                  <button
+                    onClick={() => deleteVenue(venue.id)}
+                    className="mt-6 w-full rounded-lg border border-red-200 py-2.5 font-semibold text-red-600 hover:bg-red-50"
+                  >
+                    Delete Venue
+                  </button>
+
+                </div>
+              </div>
+            ))}
+
+          </div>
+        )}
+
+      </section>
+
+      {/* ADD VENUE MODAL */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+
+          <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl">
+
+            <div className="flex items-center justify-between border-b p-6">
+
+              <div>
+                <h2 className="text-2xl font-bold">
+                  Add New Venue
+                </h2>
+
+                <p className="mt-1 text-sm text-slate-500">
+                  Enter the details of your wedding venue.
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setShowForm(false);
+                  resetForm();
+                }}
+                className="text-2xl text-slate-500 hover:text-slate-900"
+              >
+                ×
+              </button>
+
+            </div>
+
+            <form onSubmit={addVenue} className="p-6">
+
+              <div className="space-y-5">
+
+                <div>
+                  <label className="mb-2 block font-medium">
+                    Venue Name
+                  </label>
+
+                  <input
+                    required
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Example: Royal Palace"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block font-medium">
+                    Location
+                  </label>
+
+                  <input
+                    required
+                    type="text"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="Example: Delhi, India"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-2">
+
+                  <div>
+                    <label className="mb-2 block font-medium">
+                      Venue Type
+                    </label>
+
+                    <select
+                      value={type}
+                      onChange={(e) => setType(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 px-4 py-3"
+                    >
+                      <option>Banquet Hall</option>
+                      <option>Hotel</option>
+                      <option>Resort</option>
+                      <option>Garden</option>
+                      <option>Farmhouse</option>
+                      <option>Beach Venue</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block font-medium">
+                      Capacity
+                    </label>
+
+                    <input
+                      required
+                      min="1"
+                      type="number"
+                      value={capacity}
+                      onChange={(e) => setCapacity(e.target.value)}
+                      placeholder="500"
+                      className="w-full rounded-lg border border-slate-300 px-4 py-3"
+                    />
+                  </div>
+
+                </div>
+
+                <div>
+                  <label className="mb-2 block font-medium">
+                    Price (₹)
+                  </label>
+
+                  <input
+                    required
+                    min="0"
+                    type="number"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder="100000"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-3"
+                  />
+                </div>
+
+                <label className="flex items-center gap-3">
+
+                  <input
+                    type="checkbox"
+                    checked={availability}
+                    onChange={(e) =>
+                      setAvailability(e.target.checked)
+                    }
+                    className="h-5 w-5"
+                  />
+
+                  <span className="font-medium">
+                    Venue is currently available
+                  </span>
+
+                </label>
+
+              </div>
+
+              <div className="mt-8 flex justify-end gap-4 border-t pt-6">
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForm(false);
+                    resetForm();
+                  }}
+                  className="rounded-lg border border-slate-300 px-5 py-3 font-semibold"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700"
+                >
+                  Add Venue
+                </button>
+
+              </div>
+
+            </form>
+
+          </div>
+
+        </div>
+      )}
+
     </main>
   );
 }
-
-useGLTF.preload(
-  "/models/SheenChair.glb"
-);
-
-useGLTF.preload(
-  "/models/RoundTable.glb"
-);
-
-useGLTF.preload(
-  "/models/Sofa.glb"
-);
-
-useGLTF.preload(
-  "/models/Stage.glb"
-);
-
-useGLTF.preload(
-  "/models/Flowers.glb"
-);
-
-useGLTF.preload(
-  "/models/Lamp.glb"
-);
