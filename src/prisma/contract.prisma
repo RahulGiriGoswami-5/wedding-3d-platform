@@ -1,0 +1,36 @@
+// use prisma-next
+
+model Venue {
+  id           Int      @id @default(autoincrement())
+  name         String
+  location     String
+  capacity     Int
+  type         String
+  price        Float
+  availability Boolean  @default(true)
+  modelUrl     String?
+  layoutData   String?
+  createdAt    TimestamptzString @default(now())
+  updatedAt    temporal.updatedAtString()
+}
+
+model InventoryItem {
+  id                Int      @id @default(autoincrement())
+  name              String
+  category          String
+
+  modelUrl          String
+  imageUrl          String?
+
+  width             Float
+  depth             Float
+  height            Float
+
+  quantity          Int
+  availableQuantity Int
+
+  price             Float
+
+  createdAt         TimestamptzString @default(now())
+  updatedAt         temporal.updatedAtString()
+}
