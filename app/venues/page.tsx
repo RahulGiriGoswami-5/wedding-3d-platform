@@ -1,10 +1,10 @@
 "use client";
 
-import { Canvas, ThreeEvent, useThree } from "@react-three/fiber";
+import { Canvas, ThreeEvent } from "@react-three/fiber";
 import {
+  Grid,
   OrbitControls,
   useGLTF,
-  Grid,
 } from "@react-three/drei";
 import {
   useEffect,
@@ -12,6 +12,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { CSSProperties } from "react";
 import * as THREE from "three";
 
 type Venue = {
@@ -45,12 +46,6 @@ type SavedScene = {
   items: FurnitureItem[];
 };
 
-/*
- * 1 Three.js unit = 1 meter.
- *
- * These are practical approximate dimensions
- * for a wedding/event planning environment.
- */
 const REAL_DIMENSIONS: Record<
   ElementType,
   [number, number, number]
@@ -83,7 +78,7 @@ const ELEMENT_NAMES: Record<ElementType, string> = {
 
 const ELEMENT_ICONS: Record<ElementType, string> = {
   chair: "🪑",
-  table: "🟤",
+  table: "🍽️",
   sofa: "🛋️",
   stage: "🎭",
   flowers: "💐",
@@ -96,7 +91,9 @@ function getModelScale(
 ) {
   const clone = scene.clone(true);
 
-  const box = new THREE.Box3().setFromObject(clone);
+  const box = new THREE.Box3().setFromObject(
+    clone
+  );
 
   const size = new THREE.Vector3();
 
@@ -105,13 +102,19 @@ function getModelScale(
   const target = REAL_DIMENSIONS[type];
 
   const xScale =
-    size.x > 0 ? target[0] / size.x : 1;
+    size.x > 0
+      ? target[0] / size.x
+      : 1;
 
   const yScale =
-    size.y > 0 ? target[1] / size.y : 1;
+    size.y > 0
+      ? target[1] / size.y
+      : 1;
 
   const zScale =
-    size.z > 0 ? target[2] / size.z : 1;
+    size.z > 0
+      ? target[2] / size.z
+      : 1;
 
   return Math.min(
     xScale,
@@ -139,92 +142,85 @@ function Furniture({
     MODEL_PATHS[item.type]
   );
 
-  const { camera, raycaster } = useThree();
-
   const pointerDown = useRef(false);
 
-  const scale = useMemo(
-    () =>
-      getModelScale(
-        scene,
-        item.type
-      ),
-    [scene, item.type]
-  );
+  const scale = useMemo(() => {
+    return getModelScale(
+      scene,
+      item.type
+    );
+  }, [scene, item.type]);
 
-  const handlePointerDown = (
+  function handlePointerDown(
     e: ThreeEvent<PointerEvent>
-  ) => {
+  ) {
     e.stopPropagation();
 
     pointerDown.current = true;
 
     onSelect();
+  }
 
-    e.target.setPointerCapture(
-      e.pointerId
-    );
-  };
-
-  const handlePointerMove = (
+  function handlePointerMove(
     e: ThreeEvent<PointerEvent>
-  ) => {
-    if (!pointerDown.current) return;
+  ) {
+    if (!pointerDown.current) {
+      return;
+    }
 
     e.stopPropagation();
 
-    /*
-     * Raycast the mouse onto the
-     * horizontal floor plane.
-     */
     const plane = new THREE.Plane(
       new THREE.Vector3(0, 1, 0),
       0
     );
 
-    const point =
-      new THREE.Vector3();
+    const point = new THREE.Vector3();
 
-    raycaster.setFromCamera(
-      e.pointer,
-      camera
-    );
+    const intersection =
+      e.ray.intersectPlane(
+        plane,
+        point
+      );
 
-    raycaster.ray.intersectPlane(
-      plane,
-      point
-    );
-
-    if (point) {
-      onMove([
-        THREE.MathUtils.clamp(
-          point.x,
-          -5.5,
-          5.5
-        ),
-        0,
-        THREE.MathUtils.clamp(
-          point.z,
-          -5.5,
-          5.5
-        ),
-      ]);
+    if (!intersection) {
+      return;
     }
-  };
 
-  const handlePointerUp = (
+    onMove([
+      THREE.MathUtils.clamp(
+        point.x,
+        -5.5,
+        5.5
+      ),
+      0,
+      THREE.MathUtils.clamp(
+        point.z,
+        -5.5,
+        5.5
+      ),
+    ]);
+  }
+
+  function handlePointerUp(
     e: ThreeEvent<PointerEvent>
-  ) => {
+  ) {
+    e.stopPropagation();
+
     pointerDown.current = false;
 
-    try {
-      e.target.releasePointerCapture(
-        e.pointerId
-      );
-    } catch {}
+    onFinishMove();
+  }
+
+  function handlePointerLeave() {
+    if (!pointerDown.current) {
+      return;
+    }
+
+    pointerDown.current = false;
 
     onFinishMove();
-  };
+  }
 
   return (
     <group
@@ -243,30 +239,30 @@ function Furniture({
         onPointerUp={
           handlePointerUp
         }
+        onPointerLeave={
+          handlePointerLeave
+        }
       />
 
       {selected && (
         <mesh
-          position={[
-            0,
-            0.02,
-            0,
-          ]}
+          position={[0, 0.02, 0]}
           rotation={[
             -Math.PI / 2,
             0,
             0,
-        ]}
-      >
-        <ringGeometry
-          args={[0.45, 0.5, 32]}
-        />
-        <meshBasicMaterial
-          color="#7c3aed"
-          transparent
-          opacity={0.75}
-        />
-      </mesh>
+          ]}
+        >
+          <ringGeometry
+            args={[0.45, 0.52, 32]}
+          />
+
+          <meshBasicMaterial
+            color="#2563eb"
+            transparent
+            opacity={0.8}
+          />
+        </mesh>
       )}
     </group>
   );
@@ -309,7 +305,7 @@ function Floor({
         />
 
         <meshStandardMaterial
-          color="#f3f4f6"
+          color="#f8fafc"
         />
       </mesh>
 
@@ -317,10 +313,10 @@ function Floor({
         args={[12, 12]}
         cellSize={0.5}
         cellThickness={0.5}
-        cellColor="#d1d5db"
+        cellColor="#cbd5e1"
         sectionSize={1}
         sectionThickness={1}
-        sectionColor="#9ca3af"
+        sectionColor="#94a3b8"
         fadeDistance={20}
         fadeStrength={1}
         infiniteGrid={false}
@@ -380,7 +376,9 @@ function EditorScene({
               position
             )
           }
-          onFinishMove={finishMove}
+          onFinishMove={
+            finishMove
+          }
         />
       ))}
 
@@ -408,6 +406,43 @@ function EditorScene({
     </>
   );
 }
+
+function InfoRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent:
+          "space-between",
+        gap: "10px",
+        marginBottom: "8px",
+        fontSize: "12px",
+      }}
+    >
+      <span
+        style={{
+          color: "#64748b",
+        }}
+      >
+        {label}
+      </span>
+
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+const sectionTitle: CSSProperties = {
+  margin: "0 0 12px",
+  fontSize: "14px",
+  color: "#1e293b",
+};
 
 function Toolbar({
   venue,
@@ -443,9 +478,9 @@ function Toolbar({
         height: "100vh",
         background: "#ffffff",
         borderLeft:
-          "1px solid #e5e7eb",
+          "1px solid #dbeafe",
         boxShadow:
-          "-5px 0 20px rgba(0,0,0,0.08)",
+          "-5px 0 20px rgba(37,99,235,0.08)",
         zIndex: 20,
         padding: "22px",
         boxSizing: "border-box",
@@ -462,7 +497,7 @@ function Toolbar({
         <div
           style={{
             fontSize: "11px",
-            color: "#7c3aed",
+            color: "#2563eb",
             fontWeight: 700,
             letterSpacing: "1px",
             marginBottom: "6px",
@@ -475,7 +510,7 @@ function Toolbar({
           style={{
             margin: 0,
             fontSize: "23px",
-            color: "#171717",
+            color: "#1e293b",
           }}
         >
           {venue
@@ -486,9 +521,8 @@ function Toolbar({
         {venue && (
           <p
             style={{
-              margin:
-                "6px 0 0",
-              color: "#6b7280",
+              margin: "6px 0 0",
+              color: "#64748b",
               fontSize: "13px",
             }}
           >
@@ -523,11 +557,11 @@ function Toolbar({
               style={{
                 padding: "12px 6px",
                 border:
-                  "1px solid #e5e7eb",
-                background: "#fafafa",
+                  "1px solid #bfdbfe",
+                background: "#eff6ff",
                 borderRadius: "9px",
                 cursor: "pointer",
-                color: "#171717",
+                color: "#1e3a8a",
                 fontWeight: 600,
               }}
             >
@@ -564,9 +598,9 @@ function Toolbar({
         {selected ? (
           <div
             style={{
-              background: "#f8f7ff",
+              background: "#eff6ff",
               border:
-                "1px solid #ddd6fe",
+                "1px solid #bfdbfe",
               borderRadius: "10px",
               padding: "14px",
             }}
@@ -575,14 +609,19 @@ function Toolbar({
               style={{
                 fontWeight: 700,
                 marginBottom: "12px",
+                color: "#1e3a8a",
               }}
             >
-              {ELEMENT_ICONS[
-                selected.type
-              ]}{" "}
-              {ELEMENT_NAMES[
-                selected.type
-              ]}
+              {
+                ELEMENT_ICONS[
+                  selected.type
+                ]
+              }{" "}
+              {
+                ELEMENT_NAMES[
+                  selected.type
+                ]
+              }
             </div>
 
             <InfoRow
@@ -609,9 +648,8 @@ function Toolbar({
             <div
               style={{
                 borderTop:
-                  "1px solid #e5e7eb",
-                margin:
-                  "10px 0",
+                  "1px solid #bfdbfe",
+                margin: "12px 0",
               }}
             />
 
@@ -642,11 +680,13 @@ function Toolbar({
           <div
             style={{
               padding: "16px",
-              background: "#f9fafb",
+              background: "#f8fafc",
               borderRadius: "9px",
-              color: "#6b7280",
+              color: "#64748b",
               fontSize: "13px",
               textAlign: "center",
+              border:
+                "1px solid #e2e8f0",
             }}
           >
             Select an element in the
@@ -667,8 +707,8 @@ function Toolbar({
         <div
           style={{
             fontSize: "13px",
-            color: "#6b7280",
-            lineHeight: 1.8,
+            color: "#64748b",
+            lineHeight: 1.9,
           }}
         >
           🖱️ Drag — Move
@@ -695,12 +735,12 @@ function Toolbar({
             display: "flex",
             justifyContent:
               "space-between",
-            marginBottom: "8px",
+            marginBottom: "10px",
           }}
         >
           <span
             style={{
-              color: "#6b7280",
+              color: "#64748b",
               fontSize: "13px",
             }}
           >
@@ -725,11 +765,11 @@ function Toolbar({
             borderRadius: "8px",
             background:
               selectedId === null
-                ? "#f3f4f6"
-                : "#fff",
+                ? "#f1f5f9"
+                : "#ffffff",
             color:
               selectedId === null
-                ? "#9ca3af"
+                ? "#94a3b8"
                 : "#dc2626",
             cursor:
               selectedId === null
@@ -749,11 +789,17 @@ function Toolbar({
           width: "100%",
           marginTop: "24px",
           padding: "14px",
-          background: "#171717",
-          color: "#fff",
+          background:
+            saving
+              ? "#93c5fd"
+              : "#2563eb",
+          color: "#ffffff",
           border: "none",
           borderRadius: "9px",
-          cursor: "pointer",
+          cursor:
+            saving
+              ? "default"
+              : "pointer",
           fontWeight: 700,
           fontSize: "14px",
         }}
@@ -767,10 +813,10 @@ function Toolbar({
         style={{
           marginTop: "14px",
           padding: "10px",
-          background: "#f9fafb",
+          background: "#f8fafc",
           borderRadius: "8px",
           fontSize: "11px",
-          color: "#9ca3af",
+          color: "#64748b",
           textAlign: "center",
         }}
       >
@@ -779,43 +825,6 @@ function Toolbar({
     </aside>
   );
 }
-
-function InfoRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent:
-          "space-between",
-        marginBottom: "7px",
-        fontSize: "12px",
-      }}
-    >
-      <span
-        style={{
-          color: "#6b7280",
-        }}
-      >
-        {label}
-      </span>
-
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-const sectionTitle: React.CSSProperties = {
-  margin:
-    "0 0 10px",
-  fontSize: "14px",
-  color: "#171717",
-};
 
 export default function Home() {
   const [venue, setVenue] =
@@ -897,7 +906,7 @@ export default function Home() {
             const saved =
               JSON.parse(
                 data.layoutData
-              );
+              ) as Partial<SavedScene>;
 
             if (
               Array.isArray(
@@ -907,77 +916,43 @@ export default function Home() {
               const validItems =
                 saved.items.filter(
                   (
-                    item: FurnitureItem
-                  ) =>
-                    Number.isInteger(
-                      item.id
-                    ) &&
-                    MODEL_PATHS[
-                      item.type
-                    ] &&
-                    Array.isArray(
-                      item.position
-                    ) &&
-                    item.position.length ===
-                      3 &&
-                    typeof item.rotation ===
-                      "number"
+                    item
+                  ): item is FurnitureItem => {
+                    return (
+                      typeof item ===
+                        "object" &&
+                      item !== null &&
+                      Number.isInteger(
+                        item.id
+                      ) &&
+                      typeof item.type ===
+                        "string" &&
+                      item.type in
+                        MODEL_PATHS &&
+                      Array.isArray(
+                        item.position
+                      ) &&
+                      item.position.length ===
+                        3 &&
+                      typeof item.rotation ===
+                        "number"
+                    );
+                  }
                 );
 
               if (
-                validItems.length
+                validItems.length > 0
               ) {
-                setItems(
-                  validItems
-                );
+                setItems(validItems);
 
                 setSelectedId(
                   validItems[0].id
                 );
               }
-            } else if (
-              Array.isArray(
-                saved.chairs
-              )
-            ) {
-              const chairs =
-                saved.chairs.map(
-                  (
-                    chair: FurnitureItem
-                  ) => ({
-                    ...chair,
-                    type: "chair" as ElementType,
-                  })
-                );
-
-              if (
-                chairs.length
-              ) {
-                setItems(chairs);
-                setSelectedId(
-                  chairs[0].id
-                );
-              }
-            } else if (
-              Array.isArray(
-                saved.position
-              )
-            ) {
-              setItems([
-                {
-                  id: 1,
-                  type: "chair",
-                  position:
-                    saved.position,
-                  rotation:
-                    saved.rotation ??
-                    0,
-                },
-              ]);
-
-              setSelectedId(1);
             }
-          } catch (layoutError) {
+          } catch (
+            layoutError
+          ) {
             console.error(
               "Layout error:",
               layoutError
@@ -1000,9 +975,6 @@ export default function Home() {
     loadVenue();
   }, []);
 
-  /*
-   * Keyboard controls.
-   */
   useEffect(() => {
     function handleKeyDown(
       e: KeyboardEvent
@@ -1129,11 +1101,12 @@ export default function Home() {
       handleKeyDown
     );
 
-    return () =>
+    return () => {
       window.removeEventListener(
         "keydown",
         handleKeyDown
       );
+    };
   }, [selectedId]);
 
   function addItem(
@@ -1141,13 +1114,17 @@ export default function Home() {
   ) {
     const id = Date.now();
 
+    const offset =
+      ((items.length % 5) - 2) *
+      0.7;
+
     const newItem: FurnitureItem = {
       id,
       type,
       position: [
+        offset,
         0,
-        0,
-        0,
+        offset,
       ],
       rotation: 0,
     };
@@ -1162,7 +1139,11 @@ export default function Home() {
 
   function updateItemPosition(
     id: number,
-    position: [number, number, number]
+    position: [
+      number,
+      number,
+      number
+    ]
   ) {
     setItems((current) =>
       current.map((item) =>
@@ -1207,9 +1188,7 @@ export default function Home() {
         )
       );
 
-      alert(
-        "Design saved!"
-      );
+      alert("Design saved!");
 
       return;
     }
@@ -1257,8 +1236,7 @@ export default function Home() {
       );
 
       alert(
-        saveError instanceof
-          Error
+        saveError instanceof Error
           ? saveError.message
           : "Failed to save design"
       );
@@ -1323,12 +1301,13 @@ export default function Home() {
         width: "100vw",
         height: "100vh",
         overflow: "hidden",
-        background: "#f3f4f6",
+        background: "#f8fafc",
       }}
     >
       <div
         style={{
-          width: "calc(100vw - 310px)",
+          width:
+            "calc(100vw - 310px)",
           height: "100vh",
         }}
       >
