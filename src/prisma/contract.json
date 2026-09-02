@@ -12,6 +12,10 @@
       "model": "InventoryItem",
       "namespace": "public"
     },
+    "savedDesign": {
+      "model": "SavedDesign",
+      "namespace": "public"
+    },
     "theme": {
       "model": "Theme",
       "namespace": "public"
@@ -285,6 +289,87 @@
               },
               "namespaceId": "public",
               "table": "inventoryItem"
+            }
+          },
+          "SavedDesign": {
+            "fields": {
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "layoutData": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "name": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "themeId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "venueId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "layoutData": {
+                  "column": "layoutData"
+                },
+                "name": {
+                  "column": "name"
+                },
+                "themeId": {
+                  "column": "themeId"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                },
+                "venueId": {
+                  "column": "venueId"
+                }
+              },
+              "namespaceId": "public",
+              "table": "savedDesign"
             }
           },
           "Theme": {
@@ -668,6 +753,61 @@
               },
               "uniques": []
             },
+            "savedDesign": {
+              "columns": {
+                "createdAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nativeType": "int4",
+                  "nullable": false
+                },
+                "layoutData": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "name": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "themeId": {
+                  "codecId": "pg/int4@1",
+                  "nativeType": "int4",
+                  "nullable": true
+                },
+                "updatedAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "venueId": {
+                  "codecId": "pg/int4@1",
+                  "nativeType": "int4",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "theme": {
               "columns": {
                 "createdAt": {
@@ -813,10 +953,10 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "d75cbaf043ce721a094c824c4c92c8236f62b5166f48b4eb23fefc1db19fb1e3"
+    "storageHash": "13ad7031daac2c0d882b0f9214b3ec97101eaf2d3ed6198be2b6cea52a42b945"
   },
   "execution": {
-    "executionHash": "94e137e6f2fe8099813a6dd83bc13227fe8d3d9c2c0bc30b125b78f48ca06b93",
+    "executionHash": "dfc781a9845d7ac6ea4f2f0b9b94089c570cea7b9857c8c1342583642fba9840",
     "mutations": {
       "defaults": [
         {
@@ -847,6 +987,21 @@
             "column": "updatedAt",
             "namespace": "public",
             "table": "inventoryItem"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "column": "updatedAt",
+            "namespace": "public",
+            "table": "savedDesign"
           }
         },
         {

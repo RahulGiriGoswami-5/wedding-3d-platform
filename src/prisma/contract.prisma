@@ -66,3 +66,17 @@ model Theme {
   createdAt       TimestamptzString @default(now())
   updatedAt       temporal.updatedAtString()
 }
+model SavedDesign {
+  id           Int      @id @default(autoincrement())
+
+  name         String
+
+  venueId      Int
+
+  themeId      Int?
+
+  layoutData   String
+
+  createdAt    TimestamptzString @default(now())
+  updatedAt    temporal.updatedAtString()
+}
