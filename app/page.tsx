@@ -85,6 +85,104 @@ type SavedScene = {
   items: FurnitureItem[];
 };
 
+
+type MatchedDesignPayload = {
+  version?: number;
+  venueId?: number | string;
+  inventory?: InventoryItem[];
+  clientRequirements?: Record<string, unknown>;
+};
+
+/* =========================================================
+   PHASE 5 MATCHED-DESIGN HELPERS
+
+   These helpers are deliberately defensive. A stale or invalid
+   localStorage handoff must never stop the 3D Designer from opening.
+========================================================= */
+
+function getMatchedElementType(category: unknown, name: unknown): ElementType {
+  const text = `${String(category ?? "")} ${String(name ?? "")}`.toLowerCase();
+
+  if (text.includes("chair")) return "chair";
+  if (text.includes("table")) return "table";
+  if (text.includes("sofa") || text.includes("couch")) return "sofa";
+  if (text.includes("stage") || text.includes("mandap") || text.includes("platform")) return "stage";
+  if (text.includes("flower") || text.includes("floral") || text.includes("decor")) return "flowers";
+  if (text.includes("lamp") || text.includes("light") || text.includes("chandelier")) return "lamp";
+
+  return "chair";
+}
+
+function positiveNumber(value: unknown, fallback: number): number {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue > 0
+    ? numberValue
+    : fallback;
+}
+
+function createMatchedFurnitureItems(
+  inventory: unknown
+): FurnitureItem[] {
+  if (!Array.isArray(inventory)) return [];
+
+  const items: FurnitureItem[] = [];
+  const columns = 4;
+  const spacing = 2.25;
+
+  inventory.forEach((rawItem, index) => {
+    if (!rawItem || typeof rawItem !== "object") return;
+
+    const item = rawItem as Partial<InventoryItem>;
+    const inventoryId = Number(item.id);
+    if (!Number.isFinite(inventoryId) || inventoryId <= 0) return;
+
+    const type = getMatchedElementType(item.category, item.name);
+    const fallback = DIMENSIONS[type];
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+
+    items.push({
+      // A unique editor ID is required even when inventory IDs are repeated.
+      id: Date.now() + index + 1,
+      inventoryId,
+      type,
+      name: typeof item.name === "string" ? item.name : "Matched Item",
+      modelUrl: typeof item.modelUrl === "string" ? item.modelUrl : "",
+      imageUrl: typeof item.imageUrl === "string" ? item.imageUrl : null,
+      width: positiveNumber(item.width, fallback.width),
+      depth: positiveNumber(item.depth, fallback.depth),
+      height: positiveNumber(item.height, fallback.height),
+      position: [
+        (column - (columns - 1) / 2) * spacing,
+        0,
+        (row - 0.5) * spacing,
+      ],
+      rotation: 0,
+    });
+  });
+
+  return items;
+}
+
+function extractVenuePayload(payload: unknown, venueId: number): Venue | null {
+  if (Array.isArray(payload)) {
+    return payload.find((item) => Number(item?.id) === venueId) ?? null;
+  }
+
+  if (!payload || typeof payload !== "object") return null;
+
+  const record = payload as Record<string, unknown>;
+  const candidates = [record.venue, record.data, record.item, payload];
+
+  for (const candidate of candidates) {
+    if (candidate && typeof candidate === "object" && Number((candidate as Venue).id) === venueId) {
+      return candidate as Venue;
+    }
+  }
+
+  return null;
+}
+
 type Theme = {
   id: number;
   name: string;
@@ -1202,6 +1300,7 @@ function TopBar({
         <a href="/" className="top-nav-link">Designer</a>
         <a href="/venues" className="top-nav-link">Venues</a>
         <a href="/inventory" className="top-nav-link">Inventory</a>
+        <a href="/themes" className="top-nav-link">Themes</a>
         <a href="/match" className="top-nav-link">Find Matches</a>
         <a href="/designs" className="top-nav-link">Saved Designs</a>
       </nav>
@@ -2456,12 +2555,7 @@ useEffect(() => {
             );
           }
 
-          loadedVenue = Array.isArray(venuePayload)
-            ? venuePayload.find(
-                (item: Venue) =>
-                  Number(item.id) === venueId
-              ) || null
-            : venuePayload;
+          loadedVenue = extractVenuePayload(venuePayload, venueId);
 
           if (!loadedVenue) {
             throw new Error(
@@ -2481,12 +2575,68 @@ useEffect(() => {
             String(loadedVenue.id)
           );
 
+          /* =================================================
+             PHASE 5: LOAD MATCHED DESIGN SAFELY
+
+             A matched design is a one-time localStorage handoff
+             from /match. It must never crash the Designer.
+             If the handoff is stale, malformed, or belongs to a
+             different venue, it is simply discarded and the normal
+             venue layout continues to load.
+          ================================================= */
+          const matchedDesignRequested =
+            params.get("matchedDesign") === "1";
+
+          if (matchedDesignRequested) {
+            let matchedDesign: MatchedDesignPayload | null = null;
+
+            try {
+              const rawMatchedDesign = localStorage.getItem("matched-design");
+              matchedDesign = rawMatchedDesign
+                ? (JSON.parse(rawMatchedDesign) as MatchedDesignPayload)
+                : null;
+            } catch (matchedDesignError) {
+              console.warn(
+                "Ignoring invalid matched-design handoff:",
+                matchedDesignError
+              );
+            }
+
+            const handoffVenueId = Number(matchedDesign?.venueId);
+            const venueMatches =
+              matchedDesign &&
+              Number.isFinite(handoffVenueId) &&
+              handoffVenueId === Number(loadedVenue.id);
+
+            if (venueMatches) {
+              const matchedItems = createMatchedFurnitureItems(
+                matchedDesign?.inventory
+              );
+
+              if (!cancelled) {
+                setItems(matchedItems);
+                setSelectedId(
+                  matchedItems.length > 0
+                    ? matchedItems[0].id
+                    : null
+                );
+              }
+
+              // Consume only a valid handoff after it has been applied.
+              localStorage.removeItem("matched-design");
+              return;
+            }
+
+            // Never throw for a stale handoff. Remove it and continue.
+            localStorage.removeItem("matched-design");
+          }
+
           if (loadedVenue.layoutData) {
             try {
               const saved =
-                JSON.parse(
-                  loadedVenue.layoutData
-                );
+                typeof loadedVenue.layoutData === "string"
+                  ? JSON.parse(loadedVenue.layoutData)
+                  : loadedVenue.layoutData;
 
               if (Array.isArray(saved?.items)) {
                 setItems(saved.items);
@@ -3583,15 +3733,17 @@ useEffect(() => {
         .topbar {
           min-height: 76px;
           flex-shrink: 0;
+          position: relative;
           display: grid;
-          grid-template-columns: minmax(200px, 1fr) auto minmax(150px, 0.8fr) auto;
+          grid-template-columns: auto minmax(0, 1fr) auto auto;
           align-items: center;
-          gap: 18px;
+          column-gap: 16px;
           padding: 0 22px;
           background: #ffffff;
           border-bottom: 1px solid #dfe2e6;
           box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
           z-index: 30;
+          overflow: visible;
         }
 
         .brand {
@@ -3637,11 +3789,15 @@ useEffect(() => {
           align-items: center;
           justify-content: center;
           gap: 4px;
+          min-width: 0;
+          width: 100%;
           padding: 5px;
           border: 1px solid #e2e8f0;
           background: #f8fafc;
           border-radius: 12px;
           white-space: nowrap;
+          overflow-x: auto;
+          scrollbar-width: thin;
         }
 
         .top-nav-link {
@@ -3660,9 +3816,19 @@ useEffect(() => {
           transform: translateY(-1px);
         }
 
+        /* The Designer link is intentionally styled as the current page in the editor. */
+        .top-nav-link:first-child {
+          background: #e0ecff;
+          color: #1d4ed8;
+        }
+
         .project-title {
+          position: static;
+          transform: none;
           text-align: center;
-          min-width: 0;
+          min-width: 130px;
+          max-width: 220px;
+          pointer-events: none;
         }
 
         .project-small {
@@ -3687,6 +3853,8 @@ useEffect(() => {
           align-items: center;
           justify-content: flex-end;
           gap: 10px;
+          margin-left: auto;
+          flex-shrink: 0;
           white-space: nowrap;
         }
 
@@ -4286,31 +4454,32 @@ useEffect(() => {
         }
 
         @media (max-width: 1250px) {
-          .topbar {
-            grid-template-columns: auto 1fr auto;
-          }
-
           .project-title {
             display: none;
           }
 
           .main-navigation {
-            overflow-x: auto;
+            flex: 1 1 auto;
             justify-content: flex-start;
+            overflow-x: auto;
+            scrollbar-width: thin;
           }
         }
 
         @media (max-width: 900px) {
           .topbar {
             min-height: auto;
-            grid-template-columns: 1fr auto;
+            grid-template-columns: auto 1fr auto;
             padding: 10px 14px;
+            row-gap: 10px;
           }
 
           .main-navigation {
             grid-column: 1 / -1;
             grid-row: 2;
-            width: 100%;
+            width: auto;
+            justify-content: flex-start;
+            overflow-x: auto;
           }
 
           .saved-status {
