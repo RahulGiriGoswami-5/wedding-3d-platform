@@ -46,82 +46,6 @@ type SavedScene = {
   items: FurnitureItem[];
 };
 
-type SavedDesignRecord = {
-  id: number;
-  name: string;
-  venueId: number;
-  themeId: number | null;
-  layoutData: string;
-};
-
-type CachedVenue = {
-  id: number;
-  name: string;
-  location: string;
-  capacity: number;
-  type: string;
-  price: number;
-  availability: boolean;
-  modelUrl: string | null;
-  layoutData: string | null;
-};
-
-const ACTIVE_VENUE_KEY = "wedding-planner-active-venue";
-const ACTIVE_VENUE_ID_KEY = "wedding-planner-active-venue-id";
-
-function cacheVenue(venue: Venue) {
-  try {
-    localStorage.setItem(ACTIVE_VENUE_ID_KEY, String(venue.id));
-    localStorage.setItem(
-      ACTIVE_VENUE_KEY,
-      JSON.stringify({
-        id: venue.id,
-        name: venue.name,
-        location: venue.location,
-        capacity: venue.capacity,
-        type: venue.type,
-        price: venue.price,
-        availability: venue.availability,
-        modelUrl: venue.modelUrl,
-        layoutData: venue.layoutData,
-      } satisfies CachedVenue)
-    );
-  } catch {
-    // Local storage is only a fallback. The database remains the source of truth.
-  }
-}
-
-function readCachedVenue(): Venue | null {
-  try {
-    const raw = localStorage.getItem(ACTIVE_VENUE_KEY);
-    if (!raw) return null;
-
-    const value = JSON.parse(raw) as Partial<CachedVenue>;
-
-    if (
-      !Number.isInteger(Number(value.id)) ||
-      Number(value.id) <= 0 ||
-      typeof value.name !== "string"
-    ) {
-      return null;
-    }
-
-    return {
-      id: Number(value.id),
-      name: value.name,
-      location: typeof value.location === "string" ? value.location : "",
-      capacity: Number(value.capacity) || 0,
-      type: typeof value.type === "string" ? value.type : "",
-      price: Number(value.price) || 0,
-      availability: Boolean(value.availability),
-      modelUrl: typeof value.modelUrl === "string" ? value.modelUrl : null,
-      layoutData: typeof value.layoutData === "string" ? value.layoutData : null,
-    };
-  } catch {
-    return null;
-  }
-}
-
 /* =========================================================
    REAL-LIFE DIMENSIONS
 ========================================================= */
@@ -921,12 +845,18 @@ function TopBar({
   venue,
   saving,
   saveScene,
+  presentationMode,
+  setPresentationMode,
   viewMode,
   setViewMode,
 }: {
   venue: Venue | null;
   saving: boolean;
   saveScene: () => void;
+  presentationMode: boolean;
+  setPresentationMode: (
+    value: boolean
+  ) => void;
   viewMode: "2D" | "3D";
   setViewMode: (
     mode: "2D" | "3D"
@@ -996,6 +926,23 @@ function TopBar({
         </span>
 
         <button
+          className={
+            presentationMode
+              ? "presentation-button active-presentation"
+              : "presentation-button"
+          }
+          onClick={() =>
+            setPresentationMode(
+              !presentationMode
+            )
+          }
+        >
+          {presentationMode
+            ? "✎ Edit Mode"
+            : "👁 Present"}
+        </button>
+
+        <button
           className="save-button"
           onClick={
             saveScene
@@ -1051,62 +998,56 @@ function LeftNav({
   setActive,
 }: {
   active: string;
-  setActive: (value: string) => void;
+  setActive: (
+    value: string
+  ) => void;
 }) {
-  const options: Array<{
-    icon: string;
-    label: string;
-    href?: string;
-  }> = [
-    { icon: "▦", label: "Project" },
-    { icon: "🔧", label: "Build" },
-    { icon: "ⓘ", label: "Info" },
-    { icon: "🪑", label: "Objects" },
-    { icon: "🏛️", label: "Venues", href: "/venues" },
-    { icon: "📦", label: "Inventory", href: "/inventory" },
-    { icon: "✨", label: "Themes", href: "/themes" },
-    { icon: "🎯", label: "Matches", href: "/match" },
-    { icon: "💾", label: "Designs", href: "/designs" },
+  const options = [
+    ["▦", "Project"],
+    ["🔧", "Build"],
+    ["ⓘ", "Info"],
+    ["🪑", "Objects"],
   ];
 
   return (
-    <nav className="left-nav" aria-label="Designer tools">
-      <div className="left-nav-scroll">
-        {options.map((option) => (
+    <nav className="left-nav">
+      {options.map(
+        ([icon, label]) => (
           <button
-            key={option.label}
-            type="button"
-            title={option.label}
+            key={label}
             className={
-              active === option.label
+              active ===
+              label
                 ? "nav-item active"
                 : "nav-item"
             }
-            onClick={() => {
-              if (option.href) {
-                window.location.assign(option.href);
-                return;
-              }
-
-              setActive(option.label);
-            }}
+            onClick={() =>
+              setActive(
+                label
+              )
+            }
           >
-            <span className="nav-icon">{option.icon}</span>
-            <span>{option.label}</span>
+            <span className="nav-icon">
+              {icon}
+            </span>
+
+            <span>
+              {label}
+            </span>
           </button>
-        ))}
-      </div>
+        )
+      )}
 
       <div className="nav-spacer" />
 
-      <button
-        type="button"
-        className="nav-item"
-        title="Help"
-        onClick={() => alert("Use Build to add items and select an object to edit it.")}
-      >
-        <span className="nav-icon">?</span>
-        <span>Help</span>
+      <button className="nav-item">
+        <span className="nav-icon">
+          ?
+        </span>
+
+        <span>
+          Help
+        </span>
       </button>
     </nav>
   );
@@ -1522,9 +1463,6 @@ export default function Home() {
   const [saving, setSaving] =
     useState(false);
 
-  const [activeDesignId, setActiveDesignId] =
-    useState<number | null>(null);
-
   const [
     measureMode,
     setMeasureMode,
@@ -1561,176 +1499,118 @@ export default function Home() {
       "3D"
     );
 
+  const [
+    presentationMode,
+    setPresentationMode,
+  ] =
+    useState(false);
+
   /* =======================================================
      LOAD VENUE
   ======================================================= */
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const idFromUrl = params.get("venueId");
-    const designIdFromUrl = Number(params.get("designId"));
+    const params =
+      new URLSearchParams(
+        window.location.search
+      );
 
-    if (
-      Number.isInteger(designIdFromUrl) &&
-      designIdFromUrl > 0
-    ) {
-      setActiveDesignId(designIdFromUrl);
-    }
+    const idParam =
+      params.get(
+        "venueId"
+      );
 
-    const cachedVenue = readCachedVenue();
-    const cachedId = localStorage.getItem(ACTIVE_VENUE_ID_KEY);
-
-    const idValue =
-      idFromUrl ||
-      (cachedVenue ? String(cachedVenue.id) : null) ||
-      cachedId;
-
-    if (!idValue) {
+    if (!idParam) {
       setLoading(false);
       return;
     }
 
-    const id = Number(idValue);
-
-    if (!Number.isInteger(id) || id <= 0) {
-      setLoading(false);
-      setError("Invalid venue.");
-      return;
-    }
+    const id =
+      Number(idParam);
 
     async function loadVenue() {
       try {
-        setLoading(true);
-        setError("");
-
-        const response = await fetch(`/api/venues?id=${id}`, {
-          cache: "no-store",
-        });
-
-        let loadedVenue: Venue | null = null;
-
-        if (response.ok) {
-          const data = await response.json();
-
-          loadedVenue = Array.isArray(data)
-            ? data.find((item: Venue) => item.id === id) ?? null
-            : data;
-
-          /*
-           * If the server record temporarily does not contain a model URL,
-           * keep the last known valid URL for this exact venue as a fallback.
-           */
-          if (
-            loadedVenue &&
-            !loadedVenue.modelUrl &&
-            cachedVenue?.id === id &&
-            cachedVenue.modelUrl
-          ) {
-            loadedVenue = {
-              ...loadedVenue,
-              modelUrl: cachedVenue.modelUrl,
-            };
-          }
-        } else if (cachedVenue?.id === id) {
-          /*
-           * The cached venue lets the editor recover gracefully from a
-           * temporary refresh/API failure instead of losing the active GLB.
-           */
-          loadedVenue = cachedVenue;
-        } else {
-          throw new Error("Failed to load venue");
-        }
-
-        if (!loadedVenue) {
-          throw new Error("Venue not found");
-        }
-
-        setVenue(loadedVenue);
-        cacheVenue(loadedVenue);
-
-        /*
-         * If the editor was opened from Saved Designs, load that exact
-         * design instead of only the venue's latest layout.
-         */
-        if (
-          Number.isInteger(designIdFromUrl) &&
-          designIdFromUrl > 0
-        ) {
-          const designResponse = await fetch(
-            `/api/designs?id=${designIdFromUrl}`,
-            { cache: "no-store" }
+        const response =
+          await fetch(
+            `/api/venues?id=${id}`
           );
 
-          if (!designResponse.ok) {
-            throw new Error("Failed to load saved design");
-          }
-
-          const design =
-            (await designResponse.json()) as SavedDesignRecord;
-
-          if (Number(design.venueId) !== id) {
-            throw new Error(
-              "The saved design does not belong to this venue"
-            );
-          }
-
-          const saved = JSON.parse(design.layoutData);
-
-          if (Array.isArray(saved.items)) {
-            setItems(saved.items);
-            setSelectedId(saved.items[0]?.id ?? null);
-            setActiveDesignId(design.id);
-          }
-
-          return;
+        if (!response.ok) {
+          throw new Error(
+            "Failed to load venue"
+          );
         }
 
-        if (loadedVenue.layoutData) {
+        const data =
+          await response.json();
+
+        const loadedVenue =
+          Array.isArray(data)
+            ? data.find(
+                (
+                  item: Venue
+                ) =>
+                  item.id ===
+                  id
+              ) ||
+              data[0]
+            : data;
+
+        setVenue(
+          loadedVenue ||
+            null
+        );
+
+        if (
+          loadedVenue?.layoutData
+        ) {
           try {
-            const saved = JSON.parse(loadedVenue.layoutData);
+            const saved =
+              JSON.parse(
+                loadedVenue.layoutData
+              );
 
-            if (Array.isArray(saved.items)) {
-              setItems(saved.items);
+            if (
+              Array.isArray(
+                saved.items
+              )
+            ) {
+              setItems(
+                saved.items
+              );
 
-              if (saved.items.length > 0) {
-                setSelectedId(saved.items[0].id);
-              } else {
-                setSelectedId(null);
+              if (
+                saved.items
+                  .length >
+                0
+              ) {
+                setSelectedId(
+                  saved
+                    .items[0]
+                    .id
+                );
               }
             }
           } catch {
-            console.log("No valid saved layout.");
+            console.log(
+              "No valid saved layout."
+            );
           }
         }
       } catch (err) {
         console.error(err);
 
-        if (cachedVenue?.id === id) {
-          setVenue(cachedVenue);
-
-          if (cachedVenue.layoutData) {
-            try {
-              const saved = JSON.parse(cachedVenue.layoutData);
-
-              if (Array.isArray(saved.items)) {
-                setItems(saved.items);
-                setSelectedId(saved.items[0]?.id ?? null);
-              }
-            } catch {
-              // Ignore an invalid cached layout.
-            }
-          }
-
-          setError("");
-        } else {
-          setError("Unable to load venue.");
-        }
+        setError(
+          "Unable to load venue."
+        );
       } finally {
-        setLoading(false);
+        setLoading(
+          false
+        );
       }
     }
 
-    void loadVenue();
+    loadVenue();
   }, []);
 
   /* =======================================================
@@ -2029,143 +1909,82 @@ export default function Home() {
   ======================================================= */
 
   async function saveScene() {
-    const sceneData: SavedScene = { items };
-    const serializedLayout = JSON.stringify(sceneData);
+    const sceneData: SavedScene =
+      {
+        items,
+      };
 
     if (!venue) {
       localStorage.setItem(
         "wedding-design",
-        serializedLayout
+        JSON.stringify(
+          sceneData
+        )
       );
-      alert("Design saved locally. Please select a venue to add it to Saved Designs.");
+
+      alert(
+        "Design saved!"
+      );
+
       return;
     }
 
     try {
-      setSaving(true);
+      setSaving(
+        true
+      );
 
-      /*
-       * First save the latest layout on the venue itself.
-       * This keeps the designer and venue data in sync.
-       */
-      const venueResponse = await fetch("/api/venues", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: venue.id,
-          layoutData: serializedLayout,
-        }),
-      });
-
-      if (!venueResponse.ok) {
-        throw new Error("Failed to save venue layout");
-      }
-
-      const updatedVenue =
-        (await venueResponse.json()) as Venue;
-
-      const nextVenue: Venue = {
-        ...venue,
-        ...updatedVenue,
-        modelUrl:
-          updatedVenue.modelUrl ??
-          venue.modelUrl,
-      };
-
-      setVenue(nextVenue);
-      cacheVenue(nextVenue);
-
-      /*
-       * Also create/update a real SavedDesign record so that the
-       * design appears on the /designs page.
-       */
-      let savedDesign: SavedDesignRecord;
-
-      if (activeDesignId !== null) {
-        const designResponse = await fetch(
-          "/api/designs",
+      const response =
+        await fetch(
+          "/api/venues",
           {
             method: "PUT",
             headers: {
-              "Content-Type": "application/json",
+              "Content-Type":
+                "application/json",
             },
-            body: JSON.stringify({
-              id: activeDesignId,
-              name: `${venue.name} Design`,
-              venueId: venue.id,
-              layoutData: serializedLayout,
-            }),
+            body: JSON.stringify(
+              {
+                id: venue.id,
+                name: venue.name,
+                location:
+                  venue.location,
+                capacity:
+                  venue.capacity,
+                type: venue.type,
+                price: venue.price,
+                availability:
+                  venue.availability,
+                modelUrl:
+                  venue.modelUrl,
+                layoutData:
+                  JSON.stringify(
+                    sceneData
+                  ),
+              }
+            ),
           }
         );
 
-        if (!designResponse.ok) {
-          throw new Error("Failed to update saved design");
-        }
-
-        savedDesign =
-          (await designResponse.json()) as SavedDesignRecord;
-      } else {
-        const designResponse = await fetch(
-          "/api/designs",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              name: `${venue.name} Design`,
-              venueId: venue.id,
-              layoutData: serializedLayout,
-            }),
-          }
-        );
-
-        if (!designResponse.ok) {
-          throw new Error("Failed to create saved design");
-        }
-
-        savedDesign =
-          (await designResponse.json()) as SavedDesignRecord;
-
-        setActiveDesignId(savedDesign.id);
-
-        /*
-         * Keep the new design ID in the URL. Future Save clicks update
-         * this design instead of creating duplicates.
-         */
-        const url = new URL(window.location.href);
-        url.searchParams.set(
-          "venueId",
-          String(venue.id)
-        );
-        url.searchParams.set(
-          "designId",
-          String(savedDesign.id)
-        );
-
-        window.history.replaceState(
-          null,
-          "",
-          `${url.pathname}${url.search}`
+      if (!response.ok) {
+        throw new Error(
+          "Failed to save"
         );
       }
 
       alert(
-        activeDesignId === null
-          ? "Design saved successfully! You can now find it in Saved Designs."
-          : "Design updated successfully!"
+        "Design saved successfully!"
       );
     } catch (err) {
       console.error(err);
+
       alert(
-        err instanceof Error
-          ? `Could not save design: ${err.message}`
-          : "Could not save design."
+        "Could not save design."
       );
     } finally {
-      setSaving(false);
+      setSaving(
+        false
+      );
     }
   }
 
@@ -2217,22 +2036,33 @@ export default function Home() {
           venue={venue}
           saving={saving}
           saveScene={saveScene}
-          viewMode={viewMode}
+          presentationMode={presentationMode}
+          setPresentationMode={
+            setPresentationMode
+          }
+          viewMode={
+            presentationMode
+              ? "3D"
+              : viewMode
+          }
           setViewMode={
             setViewMode
           }
         />
 
         <div className="editor-body">
-          <LeftNav
-            active={activeNav}
-            setActive={
-              setActiveNav
-            }
-          />
+          {!presentationMode && (
+            <LeftNav
+              active={activeNav}
+              setActive={
+                setActiveNav
+              }
+            />
+          )}
 
-          {activeNav ===
-            "Build" && (
+          {!presentationMode &&
+            activeNav ===
+              "Build" && (
             <BuildPanel
               addItem={addItem}
               measureMode={
@@ -2244,11 +2074,18 @@ export default function Home() {
             />
           )}
 
-          <div className="workspace">
+          <div
+            className={
+              presentationMode
+                ? "workspace presentation-workspace"
+                : "workspace"
+            }
+          >
             <Canvas
               shadows={
+                presentationMode ||
                 viewMode ===
-                "3D"
+                  "3D"
               }
               camera={{
                 position: [
@@ -2262,8 +2099,9 @@ export default function Home() {
               {/* =================================================
                   2D CAMERA
               ================================================= */}
-              {viewMode ===
-                "2D" && (
+              {!presentationMode &&
+                viewMode ===
+                  "2D" && (
                 <OrthographicCamera
                   makeDefault
                   position={[
@@ -2297,7 +2135,8 @@ export default function Home() {
               {/* =================================================
                   UPLOADED VENUE GLB
               ================================================= */}
-              {viewMode === "3D" &&
+              {(presentationMode ||
+                viewMode === "3D") &&
                 venue?.modelUrl && (
                   <Suspense fallback={null}>
                     <VenueModel
@@ -2313,8 +2152,9 @@ export default function Home() {
 
               {items.map(
                 item =>
-                  viewMode ===
-                  "3D" ? (
+                  (presentationMode ||
+                    viewMode ===
+                      "3D") ? (
                     <Furniture3D
                       key={
                         item.id
@@ -2409,8 +2249,9 @@ export default function Home() {
               {/* LIGHTING */}
               <ambientLight
                 intensity={
+                  presentationMode ||
                   viewMode ===
-                  "3D"
+                    "3D"
                     ? 1.2
                     : 1
                 }
@@ -2423,14 +2264,16 @@ export default function Home() {
                   5,
                 ]}
                 intensity={
+                  presentationMode ||
                   viewMode ===
-                  "3D"
+                    "3D"
                     ? 2
                     : 1
                 }
                 castShadow={
+                  presentationMode ||
                   viewMode ===
-                  "3D"
+                    "3D"
                 }
               />
 
@@ -2447,8 +2290,9 @@ export default function Home() {
               <OrbitControls
                 makeDefault
                 enableRotate={
+                  presentationMode ||
                   viewMode ===
-                  "3D"
+                    "3D"
                 }
                 enablePan={
                   true
@@ -2466,6 +2310,7 @@ export default function Home() {
                 WORKSPACE TITLE
             ================================================= */}
 
+            {!presentationMode && (
             <div className="workspace-title">
               <span>
                 {viewMode} VIEW
@@ -2479,13 +2324,25 @@ export default function Home() {
                     "Wedding Venue"}
               </strong>
             </div>
+            )}
+
+            {presentationMode && (
+              <div className="presentation-title">
+                <span>CLIENT PRESENTATION</span>
+                <strong>
+                  {venue?.name ||
+                    "Wedding Venue"}
+                </strong>
+              </div>
+            )}
 
             {/* =================================================
                 2D INFO
             ================================================= */}
 
-            {viewMode ===
-              "2D" && (
+            {!presentationMode &&
+              viewMode ===
+                "2D" && (
               <div className="plan-info">
                 <span>
                   📐 Top-down floor
@@ -2504,31 +2361,35 @@ export default function Home() {
             )}
 
             {/* BOTTOM TOOLBAR */}
-            <BottomToolbar
-              startMeasurement={
-                startMeasurement
-              }
-              measureMode={
-                measureMode
-              }
-              clearMeasurement={
-                clearMeasurement
-              }
-            />
+            {!presentationMode && (
+              <BottomToolbar
+                startMeasurement={
+                  startMeasurement
+                }
+                measureMode={
+                  measureMode
+                }
+                clearMeasurement={
+                  clearMeasurement
+                }
+              />
+            )}
           </div>
 
           {/* PROPERTIES */}
-          <PropertiesPanel
-            selected={
-              selected
-            }
-            deleteSelected={
-              deleteSelected
-            }
-            rotateSelected={
-              rotateSelected
-            }
-          />
+          {!presentationMode && (
+            <PropertiesPanel
+              selected={
+                selected
+              }
+              deleteSelected={
+                deleteSelected
+              }
+              rotateSelected={
+                rotateSelected
+              }
+            />
+          )}
         </div>
       </div>
 
@@ -2681,6 +2542,69 @@ export default function Home() {
           font-weight: 700;
         }
 
+        .presentation-button {
+          border: 1px solid #bfdbfe;
+          background: #eff6ff;
+          color: #1d4ed8;
+          border-radius: 7px;
+          padding: 9px 13px;
+          cursor: pointer;
+          font-weight: 800;
+          white-space: nowrap;
+        }
+
+        .presentation-button:hover,
+        .active-presentation {
+          background: #dbeafe;
+          border-color: #60a5fa;
+        }
+
+        .presentation-workspace {
+          background:
+            radial-gradient(
+              circle at 50% 45%,
+              #ffffff 0%,
+              #e8edf3 70%
+            );
+        }
+
+        .presentation-title {
+          position: absolute;
+          top: 18px;
+          left: 50%;
+          transform: translateX(-50%);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 4px;
+          padding: 10px 18px;
+          background: rgba(
+            255,
+            255,
+            255,
+            0.92
+          );
+          border: 1px solid #dfe2e6;
+          border-radius: 9px;
+          box-shadow:
+            0 4px 14px
+            rgba(0, 0, 0, 0.08);
+          pointer-events: none;
+          z-index: 10;
+        }
+
+        .presentation-title span {
+          color: #2563eb;
+          font-size: 9px;
+          font-weight: 800;
+          letter-spacing: 1px;
+        }
+
+        .presentation-title strong {
+          color: #374151;
+          font-size: 15px;
+        }
+
         .save-button {
           border: none;
           background: #2563eb;
@@ -2756,7 +2680,7 @@ export default function Home() {
           border: none;
           background: transparent;
           border-radius: 8px;
-          min-height: 58px;
+          min-height: 64px;
           display: flex;
           flex-direction: column;
           align-items: center;
