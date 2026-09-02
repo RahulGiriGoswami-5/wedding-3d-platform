@@ -46,6 +46,82 @@ type SavedScene = {
   items: FurnitureItem[];
 };
 
+type SavedDesignRecord = {
+  id: number;
+  name: string;
+  venueId: number;
+  themeId: number | null;
+  layoutData: string;
+};
+
+type CachedVenue = {
+  id: number;
+  name: string;
+  location: string;
+  capacity: number;
+  type: string;
+  price: number;
+  availability: boolean;
+  modelUrl: string | null;
+  layoutData: string | null;
+};
+
+const ACTIVE_VENUE_KEY = "wedding-planner-active-venue";
+const ACTIVE_VENUE_ID_KEY = "wedding-planner-active-venue-id";
+
+function cacheVenue(venue: Venue) {
+  try {
+    localStorage.setItem(ACTIVE_VENUE_ID_KEY, String(venue.id));
+    localStorage.setItem(
+      ACTIVE_VENUE_KEY,
+      JSON.stringify({
+        id: venue.id,
+        name: venue.name,
+        location: venue.location,
+        capacity: venue.capacity,
+        type: venue.type,
+        price: venue.price,
+        availability: venue.availability,
+        modelUrl: venue.modelUrl,
+        layoutData: venue.layoutData,
+      } satisfies CachedVenue)
+    );
+  } catch {
+    // Local storage is only a fallback. The database remains the source of truth.
+  }
+}
+
+function readCachedVenue(): Venue | null {
+  try {
+    const raw = localStorage.getItem(ACTIVE_VENUE_KEY);
+    if (!raw) return null;
+
+    const value = JSON.parse(raw) as Partial<CachedVenue>;
+
+    if (
+      !Number.isInteger(Number(value.id)) ||
+      Number(value.id) <= 0 ||
+      typeof value.name !== "string"
+    ) {
+      return null;
+    }
+
+    return {
+      id: Number(value.id),
+      name: value.name,
+      location: typeof value.location === "string" ? value.location : "",
+      capacity: Number(value.capacity) || 0,
+      type: typeof value.type === "string" ? value.type : "",
+      price: Number(value.price) || 0,
+      availability: Boolean(value.availability),
+      modelUrl: typeof value.modelUrl === "string" ? value.modelUrl : null,
+      layoutData: typeof value.layoutData === "string" ? value.layoutData : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /* =========================================================
    REAL-LIFE DIMENSIONS
 ========================================================= */
@@ -975,56 +1051,62 @@ function LeftNav({
   setActive,
 }: {
   active: string;
-  setActive: (
-    value: string
-  ) => void;
+  setActive: (value: string) => void;
 }) {
-  const options = [
-    ["▦", "Project"],
-    ["🔧", "Build"],
-    ["ⓘ", "Info"],
-    ["🪑", "Objects"],
+  const options: Array<{
+    icon: string;
+    label: string;
+    href?: string;
+  }> = [
+    { icon: "▦", label: "Project" },
+    { icon: "🔧", label: "Build" },
+    { icon: "ⓘ", label: "Info" },
+    { icon: "🪑", label: "Objects" },
+    { icon: "🏛️", label: "Venues", href: "/venues" },
+    { icon: "📦", label: "Inventory", href: "/inventory" },
+    { icon: "✨", label: "Themes", href: "/themes" },
+    { icon: "🎯", label: "Matches", href: "/match" },
+    { icon: "💾", label: "Designs", href: "/designs" },
   ];
 
   return (
-    <nav className="left-nav">
-      {options.map(
-        ([icon, label]) => (
+    <nav className="left-nav" aria-label="Designer tools">
+      <div className="left-nav-scroll">
+        {options.map((option) => (
           <button
-            key={label}
+            key={option.label}
+            type="button"
+            title={option.label}
             className={
-              active ===
-              label
+              active === option.label
                 ? "nav-item active"
                 : "nav-item"
             }
-            onClick={() =>
-              setActive(
-                label
-              )
-            }
-          >
-            <span className="nav-icon">
-              {icon}
-            </span>
+            onClick={() => {
+              if (option.href) {
+                window.location.assign(option.href);
+                return;
+              }
 
-            <span>
-              {label}
-            </span>
+              setActive(option.label);
+            }}
+          >
+            <span className="nav-icon">{option.icon}</span>
+            <span>{option.label}</span>
           </button>
-        )
-      )}
+        ))}
+      </div>
 
       <div className="nav-spacer" />
 
-      <button className="nav-item">
-        <span className="nav-icon">
-          ?
-        </span>
-
-        <span>
-          Help
-        </span>
+      <button
+        type="button"
+        className="nav-item"
+        title="Help"
+        onClick={() => alert("Use Build to add items and select an object to edit it.")}
+      >
+        <span className="nav-icon">?</span>
+        <span>Help</span>
       </button>
     </nav>
   );
@@ -1440,6 +1522,9 @@ export default function Home() {
   const [saving, setSaving] =
     useState(false);
 
+  const [activeDesignId, setActiveDesignId] =
+    useState<number | null>(null);
+
   const [
     measureMode,
     setMeasureMode,
@@ -1481,107 +1566,171 @@ export default function Home() {
   ======================================================= */
 
   useEffect(() => {
-    const params =
-      new URLSearchParams(
-        window.location.search
-      );
+    const params = new URLSearchParams(window.location.search);
+    const idFromUrl = params.get("venueId");
+    const designIdFromUrl = Number(params.get("designId"));
 
-    const idParam =
-      params.get(
-        "venueId"
-      );
+    if (
+      Number.isInteger(designIdFromUrl) &&
+      designIdFromUrl > 0
+    ) {
+      setActiveDesignId(designIdFromUrl);
+    }
 
-    if (!idParam) {
+    const cachedVenue = readCachedVenue();
+    const cachedId = localStorage.getItem(ACTIVE_VENUE_ID_KEY);
+
+    const idValue =
+      idFromUrl ||
+      (cachedVenue ? String(cachedVenue.id) : null) ||
+      cachedId;
+
+    if (!idValue) {
       setLoading(false);
       return;
     }
 
-    const id =
-      Number(idParam);
+    const id = Number(idValue);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      setLoading(false);
+      setError("Invalid venue.");
+      return;
+    }
 
     async function loadVenue() {
       try {
-        const response =
-          await fetch(
-            `/api/venues?id=${id}`
-          );
+        setLoading(true);
+        setError("");
 
-        if (!response.ok) {
-          throw new Error(
-            "Failed to load venue"
-          );
-        }
+        const response = await fetch(`/api/venues?id=${id}`, {
+          cache: "no-store",
+        });
 
-        const data =
-          await response.json();
+        let loadedVenue: Venue | null = null;
 
-        const loadedVenue =
-          Array.isArray(data)
-            ? data.find(
-                (
-                  item: Venue
-                ) =>
-                  item.id ===
-                  id
-              ) ||
-              data[0]
+        if (response.ok) {
+          const data = await response.json();
+
+          loadedVenue = Array.isArray(data)
+            ? data.find((item: Venue) => item.id === id) ?? null
             : data;
 
-        setVenue(
-          loadedVenue ||
-            null
-        );
+          /*
+           * If the server record temporarily does not contain a model URL,
+           * keep the last known valid URL for this exact venue as a fallback.
+           */
+          if (
+            loadedVenue &&
+            !loadedVenue.modelUrl &&
+            cachedVenue?.id === id &&
+            cachedVenue.modelUrl
+          ) {
+            loadedVenue = {
+              ...loadedVenue,
+              modelUrl: cachedVenue.modelUrl,
+            };
+          }
+        } else if (cachedVenue?.id === id) {
+          /*
+           * The cached venue lets the editor recover gracefully from a
+           * temporary refresh/API failure instead of losing the active GLB.
+           */
+          loadedVenue = cachedVenue;
+        } else {
+          throw new Error("Failed to load venue");
+        }
 
+        if (!loadedVenue) {
+          throw new Error("Venue not found");
+        }
+
+        setVenue(loadedVenue);
+        cacheVenue(loadedVenue);
+
+        /*
+         * If the editor was opened from Saved Designs, load that exact
+         * design instead of only the venue's latest layout.
+         */
         if (
-          loadedVenue?.layoutData
+          Number.isInteger(designIdFromUrl) &&
+          designIdFromUrl > 0
         ) {
+          const designResponse = await fetch(
+            `/api/designs?id=${designIdFromUrl}`,
+            { cache: "no-store" }
+          );
+
+          if (!designResponse.ok) {
+            throw new Error("Failed to load saved design");
+          }
+
+          const design =
+            (await designResponse.json()) as SavedDesignRecord;
+
+          if (Number(design.venueId) !== id) {
+            throw new Error(
+              "The saved design does not belong to this venue"
+            );
+          }
+
+          const saved = JSON.parse(design.layoutData);
+
+          if (Array.isArray(saved.items)) {
+            setItems(saved.items);
+            setSelectedId(saved.items[0]?.id ?? null);
+            setActiveDesignId(design.id);
+          }
+
+          return;
+        }
+
+        if (loadedVenue.layoutData) {
           try {
-            const saved =
-              JSON.parse(
-                loadedVenue.layoutData
-              );
+            const saved = JSON.parse(loadedVenue.layoutData);
 
-            if (
-              Array.isArray(
-                saved.items
-              )
-            ) {
-              setItems(
-                saved.items
-              );
+            if (Array.isArray(saved.items)) {
+              setItems(saved.items);
 
-              if (
-                saved.items
-                  .length >
-                0
-              ) {
-                setSelectedId(
-                  saved
-                    .items[0]
-                    .id
-                );
+              if (saved.items.length > 0) {
+                setSelectedId(saved.items[0].id);
+              } else {
+                setSelectedId(null);
               }
             }
           } catch {
-            console.log(
-              "No valid saved layout."
-            );
+            console.log("No valid saved layout.");
           }
         }
       } catch (err) {
         console.error(err);
 
-        setError(
-          "Unable to load venue."
-        );
+        if (cachedVenue?.id === id) {
+          setVenue(cachedVenue);
+
+          if (cachedVenue.layoutData) {
+            try {
+              const saved = JSON.parse(cachedVenue.layoutData);
+
+              if (Array.isArray(saved.items)) {
+                setItems(saved.items);
+                setSelectedId(saved.items[0]?.id ?? null);
+              }
+            } catch {
+              // Ignore an invalid cached layout.
+            }
+          }
+
+          setError("");
+        } else {
+          setError("Unable to load venue.");
+        }
       } finally {
-        setLoading(
-          false
-        );
+        setLoading(false);
       }
     }
 
-    loadVenue();
+    void loadVenue();
   }, []);
 
   /* =======================================================
@@ -1880,82 +2029,143 @@ export default function Home() {
   ======================================================= */
 
   async function saveScene() {
-    const sceneData: SavedScene =
-      {
-        items,
-      };
+    const sceneData: SavedScene = { items };
+    const serializedLayout = JSON.stringify(sceneData);
 
     if (!venue) {
       localStorage.setItem(
         "wedding-design",
-        JSON.stringify(
-          sceneData
-        )
+        serializedLayout
       );
-
-      alert(
-        "Design saved!"
-      );
-
+      alert("Design saved locally. Please select a venue to add it to Saved Designs.");
       return;
     }
 
     try {
-      setSaving(
-        true
-      );
+      setSaving(true);
 
-      const response =
-        await fetch(
-          "/api/venues",
+      /*
+       * First save the latest layout on the venue itself.
+       * This keeps the designer and venue data in sync.
+       */
+      const venueResponse = await fetch("/api/venues", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: venue.id,
+          layoutData: serializedLayout,
+        }),
+      });
+
+      if (!venueResponse.ok) {
+        throw new Error("Failed to save venue layout");
+      }
+
+      const updatedVenue =
+        (await venueResponse.json()) as Venue;
+
+      const nextVenue: Venue = {
+        ...venue,
+        ...updatedVenue,
+        modelUrl:
+          updatedVenue.modelUrl ??
+          venue.modelUrl,
+      };
+
+      setVenue(nextVenue);
+      cacheVenue(nextVenue);
+
+      /*
+       * Also create/update a real SavedDesign record so that the
+       * design appears on the /designs page.
+       */
+      let savedDesign: SavedDesignRecord;
+
+      if (activeDesignId !== null) {
+        const designResponse = await fetch(
+          "/api/designs",
           {
             method: "PUT",
             headers: {
-              "Content-Type":
-                "application/json",
+              "Content-Type": "application/json",
             },
-            body: JSON.stringify(
-              {
-                id: venue.id,
-                name: venue.name,
-                location:
-                  venue.location,
-                capacity:
-                  venue.capacity,
-                type: venue.type,
-                price: venue.price,
-                availability:
-                  venue.availability,
-                modelUrl:
-                  venue.modelUrl,
-                layoutData:
-                  JSON.stringify(
-                    sceneData
-                  ),
-              }
-            ),
+            body: JSON.stringify({
+              id: activeDesignId,
+              name: `${venue.name} Design`,
+              venueId: venue.id,
+              layoutData: serializedLayout,
+            }),
           }
         );
 
-      if (!response.ok) {
-        throw new Error(
-          "Failed to save"
+        if (!designResponse.ok) {
+          throw new Error("Failed to update saved design");
+        }
+
+        savedDesign =
+          (await designResponse.json()) as SavedDesignRecord;
+      } else {
+        const designResponse = await fetch(
+          "/api/designs",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              name: `${venue.name} Design`,
+              venueId: venue.id,
+              layoutData: serializedLayout,
+            }),
+          }
+        );
+
+        if (!designResponse.ok) {
+          throw new Error("Failed to create saved design");
+        }
+
+        savedDesign =
+          (await designResponse.json()) as SavedDesignRecord;
+
+        setActiveDesignId(savedDesign.id);
+
+        /*
+         * Keep the new design ID in the URL. Future Save clicks update
+         * this design instead of creating duplicates.
+         */
+        const url = new URL(window.location.href);
+        url.searchParams.set(
+          "venueId",
+          String(venue.id)
+        );
+        url.searchParams.set(
+          "designId",
+          String(savedDesign.id)
+        );
+
+        window.history.replaceState(
+          null,
+          "",
+          `${url.pathname}${url.search}`
         );
       }
 
       alert(
-        "Design saved successfully!"
+        activeDesignId === null
+          ? "Design saved successfully! You can now find it in Saved Designs."
+          : "Design updated successfully!"
       );
     } catch (err) {
       console.error(err);
-
       alert(
-        "Could not save design."
+        err instanceof Error
+          ? `Could not save design: ${err.message}`
+          : "Could not save design."
       );
     } finally {
-      setSaving(
-        false
-      );
+      setSaving(false);
     }
   }
 
@@ -2546,7 +2756,7 @@ export default function Home() {
           border: none;
           background: transparent;
           border-radius: 8px;
-          min-height: 64px;
+          min-height: 58px;
           display: flex;
           flex-direction: column;
           align-items: center;
