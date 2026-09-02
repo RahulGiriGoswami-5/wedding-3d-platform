@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 type Venue = {
   id: number;
@@ -12,567 +12,1359 @@ type Venue = {
   price: number;
   availability: boolean;
   modelUrl?: string | null;
+  layoutData?: string | null;
+};
+
+type VenueFormData = {
+  name: string;
+  location: string;
+  type: string;
+  capacity: string;
+  price: string;
+  availability: boolean;
+};
+
+const initialFormData: VenueFormData = {
+  name: "",
+  location: "",
+  type: "Banquet Hall",
+  capacity: "",
+  price: "",
+  availability: true,
 };
 
 export default function VenuesPage() {
+  const router = useRouter();
+
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [showForm, setShowForm] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [formData, setFormData] =
+    useState<VenueFormData>(initialFormData);
 
-  const [name, setName] = useState("");
-  const [location, setLocation] = useState("");
-  const [capacity, setCapacity] = useState("");
-  const [type, setType] = useState("Banquet Hall");
-  const [price, setPrice] = useState("");
-  const [availability, setAvailability] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
-  async function loadVenues() {
+  async function fetchVenues() {
     try {
       setLoading(true);
-      setError("");
 
-      const response = await fetch("/api/venues", {
-        cache: "no-store",
-      });
+      const response = await fetch("/api/venues");
 
       if (!response.ok) {
-        throw new Error("Failed to load venues");
+        throw new Error("Failed to fetch venues");
       }
 
       const data = await response.json();
 
-      setVenues(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error(err);
-      setError("Could not load venues.");
+      setVenues(data);
+    } catch (error) {
+      console.error("Failed to fetch venues:", error);
+      alert("Failed to load venues.");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadVenues();
+    fetchVenues();
   }, []);
 
-  function resetForm() {
-    setName("");
-    setLocation("");
-    setCapacity("");
-    setType("Banquet Hall");
-    setPrice("");
-    setAvailability(true);
+  function handleInputChange(
+    event: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement
+    >
+  ) {
+    const { name, value, type } = event.target;
+
+    if (type === "checkbox") {
+      const checked = (
+        event.target as HTMLInputElement
+      ).checked;
+
+      setFormData((previous) => ({
+        ...previous,
+        [name]: checked,
+      }));
+
+      return;
+    }
+
+    setFormData((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
   }
 
-  async function addVenue(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function handleAddVenue(
+    event: React.FormEvent
+  ) {
+    event.preventDefault();
+
+    if (
+      !formData.name.trim() ||
+      !formData.location.trim() ||
+      !formData.capacity ||
+      !formData.price
+    ) {
+      alert("Please fill in all required fields.");
+      return;
+    }
 
     try {
-      const response = await fetch("/api/venues", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name,
-          location,
-          capacity: Number(capacity),
-          type,
-          price: Number(price),
-          availability,
-          modelUrl: null,
-        }),
-      });
+      setSubmitting(true);
 
-      const data = await response.json();
+      const response = await fetch(
+        "/api/venues",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+            name: formData.name.trim(),
+
+            location:
+              formData.location.trim(),
+
+            type: formData.type,
+
+            capacity: Number(
+              formData.capacity
+            ),
+
+            price: Number(
+              formData.price
+            ),
+
+            availability:
+              formData.availability,
+          }),
+        }
+      );
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to add venue");
+        const errorData =
+          await response.json();
+
+        throw new Error(
+          errorData.error ||
+            "Failed to add venue"
+        );
       }
 
-      setShowForm(false);
-      resetForm();
-      await loadVenues();
-    } catch (err) {
-      console.error(err);
-      alert(
-        err instanceof Error
-          ? err.message
-          : "Failed to add venue"
+      setShowModal(false);
+
+      setFormData(initialFormData);
+
+      await fetchVenues();
+    } catch (error) {
+      console.error(
+        "Failed to add venue:",
+        error
       );
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Failed to add venue."
+      );
+    } finally {
+      setSubmitting(false);
     }
   }
 
-  async function deleteVenue(id: number) {
+  async function handleDeleteVenue(
+    venueId: number
+  ) {
     const confirmed = window.confirm(
       "Are you sure you want to delete this venue?"
     );
 
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     try {
-      const response = await fetch("/api/venues", {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ id }),
-      });
+      const response = await fetch(
+        "/api/venues",
+        {
+          method: "DELETE",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+            id: venueId,
+          }),
+        }
+      );
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to delete venue");
+        throw new Error(
+          "Failed to delete venue"
+        );
       }
 
-      await loadVenues();
-    } catch (err) {
-      console.error(err);
-      alert("Failed to delete venue");
+      const selectedVenue =
+        localStorage.getItem(
+          "selectedVenue"
+        );
+
+      if (selectedVenue) {
+        const parsedVenue =
+          JSON.parse(selectedVenue);
+
+        if (parsedVenue.id === venueId) {
+          localStorage.removeItem(
+            "selectedVenue"
+          );
+        }
+      }
+
+      await fetchVenues();
+    } catch (error) {
+      console.error(
+        "Failed to delete venue:",
+        error
+      );
+
+      alert("Failed to delete venue.");
     }
   }
 
-  function formatPrice(value: number) {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: 0,
-    }).format(value);
-  }
+ function handleChooseVenue(
+  venue: Venue
+) {
+  /*
+   * Save the selected venue locally
+   * as an additional backup.
+   */
+  localStorage.setItem(
+    "selectedVenue",
+    JSON.stringify(venue)
+  );
+
+  localStorage.setItem(
+    "selectedVenueId",
+    String(venue.id)
+  );
+
+  /*
+   * Open the Designer WITH
+   * the venue ID in the URL.
+   */
+  router.push(
+    `/?venueId=${venue.id}`
+  );
+}
+
+  const totalVenues = venues.length;
+
+  const availableVenues =
+    venues.filter(
+      (venue) =>
+        venue.availability
+    ).length;
+
+  const maximumCapacity =
+    venues.length > 0
+      ? Math.max(
+          ...venues.map(
+            (venue) =>
+              venue.capacity
+          )
+        )
+      : 0;
 
   return (
-    <main className="min-h-screen bg-slate-50">
-
-      {/* NAVBAR */}
-      <nav className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-
-          <Link href="/" className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-blue-600 text-xl font-bold text-white">
-              W
-            </div>
-
-            <div>
-              <h1 className="font-bold text-slate-900">
-                Wedding Planner
-              </h1>
-
-              <p className="text-xs text-slate-500">
-                3D Venue Designer
-              </p>
-            </div>
-          </Link>
-
-          <div className="flex items-center gap-6">
-            <Link
-              href="/"
-              className="font-medium text-slate-600 hover:text-blue-600"
-            >
-              Designer
-            </Link>
-
-            <Link
-              href="/venues"
-              className="font-semibold text-blue-600"
-            >
-              Venues
-            </Link>
-          </div>
-
-          <button
-            onClick={() => setShowForm(true)}
-            className="rounded-lg bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-700"
-          >
-            + Add Venue
-          </button>
-
-        </div>
-      </nav>
-
+    <main
+      style={{
+        minHeight: "100vh",
+        background:
+          "#f5f7fb",
+        color: "#1e293b",
+      }}
+    >
       {/* HEADER */}
-      <section className="border-b border-slate-200 bg-gradient-to-br from-blue-50 to-white">
-        <div className="mx-auto max-w-7xl px-6 py-16">
 
-          <p className="mb-3 font-semibold uppercase tracking-wider text-blue-600">
-            Wedding Venue Management
-          </p>
-
-          <h2 className="text-4xl font-bold text-slate-900">
-            Discover Your Perfect Wedding Venue
-          </h2>
-
-          <p className="mt-4 max-w-2xl text-lg text-slate-600">
-            Browse, manage and organize venues for your wedding events.
-            Compare capacity, location and pricing to find the ideal venue.
-          </p>
-
-          <div className="mt-7">
-            <button
-              onClick={() => setShowForm(true)}
-              className="rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700"
-            >
-              Add New Venue
-            </button>
+      <header
+        style={{
+          height: "86px",
+          background: "#ffffff",
+          borderBottom:
+            "1px solid #e2e8f0",
+          display: "flex",
+          alignItems: "center",
+          justifyContent:
+            "space-between",
+          padding:
+            "0 32px",
+          boxShadow:
+            "0 2px 8px rgba(15, 23, 42, 0.04)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+          }}
+        >
+          <div
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "10px",
+              background:
+                "#1d4ed8",
+              color: "#ffffff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent:
+                "center",
+              fontWeight: "bold",
+              fontSize: "24px",
+            }}
+          >
+            W
           </div>
-
-        </div>
-      </section>
-
-      {/* STATS */}
-      <section className="mx-auto grid max-w-7xl gap-5 px-6 py-10 md:grid-cols-3">
-
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-sm text-slate-500">
-            Total Venues
-          </p>
-
-          <p className="mt-2 text-3xl font-bold text-slate-900">
-            {venues.length}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-sm text-slate-500">
-            Available Venues
-          </p>
-
-          <p className="mt-2 text-3xl font-bold text-green-600">
-            {venues.filter((venue) => venue.availability).length}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-sm text-slate-500">
-            Maximum Capacity
-          </p>
-
-          <p className="mt-2 text-3xl font-bold text-blue-600">
-            {venues.length > 0
-              ? Math.max(...venues.map((venue) => venue.capacity))
-              : 0}
-          </p>
-        </div>
-
-      </section>
-
-      {/* VENUES */}
-      <section className="mx-auto max-w-7xl px-6 pb-16">
-
-        <div className="mb-8 flex items-center justify-between">
 
           <div>
-            <h2 className="text-3xl font-bold text-slate-900">
-              Available Venues
-            </h2>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: "21px",
+                fontWeight: 700,
+              }}
+            >
+              Wedding Planner
+            </h1>
 
-            <p className="mt-2 text-slate-600">
-              Manage all your wedding venues in one place.
+            <p
+              style={{
+                margin:
+                  "3px 0 0",
+                color: "#64748b",
+                fontSize: "13px",
+              }}
+            >
+              3D Venue Designer
             </p>
           </div>
-
-          <button
-            onClick={loadVenues}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 font-medium text-slate-700 hover:bg-slate-100"
-          >
-            Refresh
-          </button>
-
         </div>
 
-        {loading && (
-          <div className="rounded-xl bg-white p-12 text-center shadow-sm">
-            <p className="text-lg text-slate-600">
-              Loading venues...
-            </p>
-          </div>
-        )}
+        <nav
+          style={{
+            display: "flex",
+            gap: "32px",
+            alignItems: "center",
+          }}
+        >
+          <button
+            onClick={() =>
+              router.push("/")
+            }
+            style={navButtonStyle}
+          >
+            Designer
+          </button>
 
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-5 text-red-600">
-            {error}
-          </div>
-        )}
+          <button
+            style={{
+              ...navButtonStyle,
+              color: "#2563eb",
+              fontWeight: 700,
+            }}
+          >
+            Venues
+          </button>
 
-        {!loading && !error && venues.length === 0 && (
-          <div className="rounded-xl border-2 border-dashed border-slate-300 bg-white p-16 text-center">
+          <button
+            onClick={() =>
+              router.push(
+                "/inventory"
+              )
+            }
+            style={navButtonStyle}
+          >
+            Inventory
+          </button>
 
-            <div className="text-5xl">🏛️</div>
+          <button
+            onClick={() =>
+              router.push(
+                "/themes"
+              )
+            }
+            style={navButtonStyle}
+          >
+            Themes
+          </button>
 
-            <h3 className="mt-5 text-xl font-bold">
-              No venues found
-            </h3>
+          <button
+            onClick={() =>
+              router.push(
+                "/designs"
+              )
+            }
+            style={navButtonStyle}
+          >
+            Saved Designs
+          </button>
+        </nav>
 
-            <p className="mt-2 text-slate-500">
-              Add your first wedding venue to get started.
-            </p>
+        <button
+          onClick={() =>
+            setShowModal(true)
+          }
+          style={{
+            background:
+              "#2563eb",
+            color: "#ffffff",
+            border: "none",
+            borderRadius: "8px",
+            padding:
+              "13px 22px",
+            fontSize: "16px",
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          + Add Venue
+        </button>
+      </header>
+
+      <div
+        style={{
+          padding:
+            "32px 24px 60px",
+          maxWidth: "1400px",
+          margin: "0 auto",
+        }}
+      >
+        {/* PAGE TITLE */}
+
+        <section
+          style={{
+            marginBottom: "30px",
+          }}
+        >
+          <p
+            style={{
+              color: "#2563eb",
+              fontSize: "13px",
+              fontWeight: 800,
+              letterSpacing: "1.5px",
+              marginBottom: "8px",
+            }}
+          >
+            WEDDING VENUE MANAGEMENT
+          </p>
+
+          <h2
+            style={{
+              margin: 0,
+              fontSize: "38px",
+              color: "#172033",
+            }}
+          >
+            Discover Your Perfect Venue
+          </h2>
+
+          <p
+            style={{
+              fontSize: "18px",
+              color: "#475569",
+              marginTop: "10px",
+            }}
+          >
+            Browse, manage and organize
+            your wedding venues.
+          </p>
+        </section>
+
+        {/* STATISTICS */}
+
+        <section
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(3, 1fr)",
+            gap: "24px",
+            marginBottom: "48px",
+          }}
+        >
+          <StatCard
+            title="Total Venues"
+            value={totalVenues}
+            color="#1d4ed8"
+          />
+
+          <StatCard
+            title="Available Venues"
+            value={availableVenues}
+            color="#16a34a"
+          />
+
+          <StatCard
+            title="Maximum Capacity"
+            value={maximumCapacity}
+            color="#2563eb"
+          />
+        </section>
+
+        {/* AVAILABLE VENUES */}
+
+        <section>
+          <div
+            style={{
+              display: "flex",
+              justifyContent:
+                "space-between",
+              alignItems:
+                "center",
+              marginBottom: "28px",
+            }}
+          >
+            <div>
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: "36px",
+                }}
+              >
+                Available Venues
+              </h2>
+
+              <p
+                style={{
+                  color: "#475569",
+                  fontSize: "18px",
+                }}
+              >
+                Manage all your wedding
+                venues in one place.
+              </p>
+            </div>
 
             <button
-              onClick={() => setShowForm(true)}
-              className="mt-6 rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700"
+              onClick={fetchVenues}
+              style={{
+                background:
+                  "#ffffff",
+                color: "#334155",
+                border:
+                  "1px solid #cbd5e1",
+                borderRadius:
+                  "10px",
+                padding:
+                  "12px 24px",
+                fontSize: "16px",
+                cursor: "pointer",
+              }}
             >
-              + Add Your First Venue
+              ↻ Refresh
             </button>
-
           </div>
-        )}
 
-        {!loading && venues.length > 0 && (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {loading ? (
+            <p
+              style={{
+                color: "#64748b",
+                fontSize: "18px",
+              }}
+            >
+              Loading venues...
+            </p>
+          ) : venues.length === 0 ? (
+            <div
+              style={{
+                background:
+                  "#ffffff",
+                padding: "50px",
+                textAlign:
+                  "center",
+                borderRadius:
+                  "16px",
+                border:
+                  "1px solid #e2e8f0",
+              }}
+            >
+              <h3>
+                No venues found
+              </h3>
 
-            {venues.map((venue) => (
-              <div
-                key={venue.id}
-                className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+              <p
+                style={{
+                  color: "#64748b",
+                }}
               >
+                Add your first venue to
+                start designing.
+              </p>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fill, minmax(380px, 1fr))",
+                gap: "28px",
+              }}
+            >
+              {venues.map(
+                (venue) => (
+                  <VenueCard
+                    key={venue.id}
+                    venue={venue}
+                    onChoose={
+                      handleChooseVenue
+                    }
+                    onDelete={
+                      handleDeleteVenue
+                    }
+                  />
+                )
+              )}
+            </div>
+          )}
+        </section>
 
-                <div className="flex h-32 items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600 text-5xl">
-                  🏛️
-                </div>
+        {/* INFORMATION */}
 
-                <div className="p-6">
+        <section
+          style={{
+            marginTop: "34px",
+            background:
+              "#eff6ff",
+            border:
+              "1px solid #bfdbfe",
+            borderRadius: "14px",
+            padding: "22px",
+          }}
+        >
+          <h3
+            style={{
+              margin:
+                "0 0 8px",
+              color: "#1e3a8a",
+            }}
+          >
+            ⓘ How it works
+          </h3>
 
-                  <div className="flex items-start justify-between gap-3">
-
-                    <div>
-                      <h3 className="text-xl font-bold text-slate-900">
-                        {venue.name}
-                      </h3>
-
-                      <p className="mt-1 text-sm text-slate-500">
-                        📍 {venue.location}
-                      </p>
-                    </div>
-
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        venue.availability
-                          ? "bg-green-100 text-green-700"
-                          : "bg-red-100 text-red-700"
-                      }`}
-                    >
-                      {venue.availability
-                        ? "Available"
-                        : "Unavailable"}
-                    </span>
-
-                  </div>
-
-                  <div className="mt-6 space-y-3 border-t pt-5">
-
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">
-                        Type
-                      </span>
-
-                      <span className="font-medium">
-                        {venue.type}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">
-                        Capacity
-                      </span>
-
-                      <span className="font-medium">
-                        {venue.capacity} guests
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">
-                        Price
-                      </span>
-
-                      <span className="font-bold text-blue-600">
-                        {formatPrice(venue.price)}
-                      </span>
-                    </div>
-
-                  </div>
-
-                  <button
-                    onClick={() => deleteVenue(venue.id)}
-                    className="mt-6 w-full rounded-lg border border-red-200 py-2.5 font-semibold text-red-600 hover:bg-red-50"
-                  >
-                    Delete Venue
-                  </button>
-
-                </div>
-              </div>
-            ))}
-
-          </div>
-        )}
-
-      </section>
+          <p
+            style={{
+              margin: 0,
+              color: "#475569",
+              fontSize: "16px",
+            }}
+          >
+            Click{" "}
+            <strong>
+              "Choose Venue"
+            </strong>{" "}
+            to open the 3D designer and
+            start creating your amazing
+            venue layout.
+          </p>
+        </section>
+      </div>
 
       {/* ADD VENUE MODAL */}
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
 
-          <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl">
-
-            <div className="flex items-center justify-between border-b p-6">
-
+      {showModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background:
+              "rgba(15, 23, 42, 0.55)",
+            display: "flex",
+            alignItems:
+              "center",
+            justifyContent:
+              "center",
+            zIndex: 1000,
+            padding: "20px",
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "700px",
+              background:
+                "#ffffff",
+              borderRadius:
+                "18px",
+              boxShadow:
+                "0 25px 70px rgba(0,0,0,0.3)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                padding:
+                  "28px 30px",
+                borderBottom:
+                  "1px solid #e2e8f0",
+                display: "flex",
+                justifyContent:
+                  "space-between",
+              }}
+            >
               <div>
-                <h2 className="text-2xl font-bold">
+                <h2
+                  style={{
+                    margin: 0,
+                    color:
+                      "#172033",
+                  }}
+                >
                   Add New Venue
                 </h2>
 
-                <p className="mt-1 text-sm text-slate-500">
-                  Enter the details of your wedding venue.
+                <p
+                  style={{
+                    color:
+                      "#64748b",
+                    marginBottom: 0,
+                  }}
+                >
+                  Enter the details of your
+                  wedding venue.
                 </p>
               </div>
 
               <button
-                onClick={() => {
-                  setShowForm(false);
-                  resetForm();
+                onClick={() =>
+                  setShowModal(false)
+                }
+                style={{
+                  border: "none",
+                  background:
+                    "transparent",
+                  fontSize: "28px",
+                  color:
+                    "#475569",
+                  cursor: "pointer",
                 }}
-                className="text-2xl text-slate-500 hover:text-slate-900"
               >
                 ×
               </button>
-
             </div>
 
-            <form onSubmit={addVenue} className="p-6">
+            <form
+              onSubmit={
+                handleAddVenue
+              }
+              style={{
+                padding:
+                  "30px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection:
+                    "column",
+                  gap: "18px",
+                }}
+              >
+                <FormField
+                  label="Venue Name"
+                  name="name"
+                  value={
+                    formData.name
+                  }
+                  onChange={
+                    handleInputChange
+                  }
+                  placeholder="Example: Royal Palace"
+                />
 
-              <div className="space-y-5">
+                <FormField
+                  label="Location"
+                  name="location"
+                  value={
+                    formData.location
+                  }
+                  onChange={
+                    handleInputChange
+                  }
+                  placeholder="Example: Delhi, India"
+                />
 
-                <div>
-                  <label className="mb-2 block font-medium">
-                    Venue Name
-                  </label>
-
-                  <input
-                    required
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Example: Royal Palace"
-                    className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block font-medium">
-                    Location
-                  </label>
-
-                  <input
-                    required
-                    type="text"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    placeholder="Example: Delhi, India"
-                    className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                <div className="grid gap-5 md:grid-cols-2">
-
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "1fr 1fr",
+                    gap: "20px",
+                  }}
+                >
                   <div>
-                    <label className="mb-2 block font-medium">
+                    <label
+                      style={
+                        labelStyle
+                      }
+                    >
                       Venue Type
                     </label>
 
                     <select
-                      value={type}
-                      onChange={(e) => setType(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-4 py-3"
+                      name="type"
+                      value={
+                        formData.type
+                      }
+                      onChange={
+                        handleInputChange
+                      }
+                      style={
+                        inputStyle
+                      }
                     >
-                      <option>Banquet Hall</option>
-                      <option>Hotel</option>
-                      <option>Resort</option>
-                      <option>Garden</option>
-                      <option>Farmhouse</option>
-                      <option>Beach Venue</option>
+                      <option>
+                        Banquet Hall
+                      </option>
+
+                      <option>
+                        Garden
+                      </option>
+
+                      <option>
+                        Hotel
+                      </option>
+
+                      <option>
+                        Resort
+                      </option>
+
+                      <option>
+                        Farmhouse
+                      </option>
                     </select>
                   </div>
 
-                  <div>
-                    <label className="mb-2 block font-medium">
-                      Capacity
-                    </label>
-
-                    <input
-                      required
-                      min="1"
-                      type="number"
-                      value={capacity}
-                      onChange={(e) => setCapacity(e.target.value)}
-                      placeholder="500"
-                      className="w-full rounded-lg border border-slate-300 px-4 py-3"
-                    />
-                  </div>
-
-                </div>
-
-                <div>
-                  <label className="mb-2 block font-medium">
-                    Price (₹)
-                  </label>
-
-                  <input
-                    required
-                    min="0"
+                  <FormField
+                    label="Capacity"
+                    name="capacity"
+                    value={
+                      formData.capacity
+                    }
+                    onChange={
+                      handleInputChange
+                    }
+                    placeholder="500"
                     type="number"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    placeholder="100000"
-                    className="w-full rounded-lg border border-slate-300 px-4 py-3"
                   />
                 </div>
 
-                <label className="flex items-center gap-3">
+                <FormField
+                  label="Price (₹)"
+                  name="price"
+                  value={
+                    formData.price
+                  }
+                  onChange={
+                    handleInputChange
+                  }
+                  placeholder="100000"
+                  type="number"
+                />
 
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems:
+                      "center",
+                    gap: "10px",
+                    color:
+                      "#334155",
+                    fontWeight: 600,
+                  }}
+                >
                   <input
                     type="checkbox"
-                    checked={availability}
-                    onChange={(e) =>
-                      setAvailability(e.target.checked)
+                    name="availability"
+                    checked={
+                      formData.availability
                     }
-                    className="h-5 w-5"
+                    onChange={
+                      handleInputChange
+                    }
+                    style={{
+                      width: "20px",
+                      height: "20px",
+                    }}
                   />
 
-                  <span className="font-medium">
-                    Venue is currently available
-                  </span>
-
+                  Venue is currently
+                  available
                 </label>
-
               </div>
 
-              <div className="mt-8 flex justify-end gap-4 border-t pt-6">
-
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent:
+                    "flex-end",
+                  gap: "14px",
+                  marginTop: "30px",
+                  paddingTop: "24px",
+                  borderTop:
+                    "1px solid #e2e8f0",
+                }}
+              >
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowForm(false);
-                    resetForm();
+                  onClick={() =>
+                    setShowModal(false)
+                  }
+                  style={{
+                    padding:
+                      "12px 24px",
+                    background:
+                      "#ffffff",
+                    border:
+                      "1px solid #cbd5e1",
+                    borderRadius:
+                      "8px",
+                    color:
+                      "#334155",
+                    fontWeight: 600,
+                    cursor: "pointer",
                   }}
-                  className="rounded-lg border border-slate-300 px-5 py-3 font-semibold"
                 >
                   Cancel
                 </button>
 
                 <button
                   type="submit"
-                  className="rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700"
+                  disabled={
+                    submitting
+                  }
+                  style={{
+                    padding:
+                      "12px 26px",
+                    background:
+                      "#2563eb",
+                    border: "none",
+                    borderRadius:
+                      "8px",
+                    color:
+                      "#ffffff",
+                    fontWeight: 700,
+                    cursor:
+                      submitting
+                        ? "not-allowed"
+                        : "pointer",
+                  }}
                 >
-                  Add Venue
+                  {submitting
+                    ? "Adding..."
+                    : "Add Venue"}
                 </button>
-
               </div>
-
             </form>
-
           </div>
-
         </div>
       )}
-
     </main>
   );
 }
+
+/* -------------------------------
+   VENUE CARD
+-------------------------------- */
+
+function VenueCard({
+  venue,
+  onChoose,
+  onDelete,
+}: {
+  venue: Venue;
+
+  onChoose: (
+    venue: Venue
+  ) => void;
+
+  onDelete: (
+    id: number
+  ) => void;
+}) {
+  return (
+    <article
+      style={{
+        background: "#ffffff",
+        borderRadius: "16px",
+        overflow: "hidden",
+        border:
+          "1px solid #e2e8f0",
+        boxShadow:
+          "0 6px 18px rgba(15, 23, 42, 0.08)",
+      }}
+    >
+      <div
+        style={{
+          height: "155px",
+          background:
+            "linear-gradient(135deg, #2563eb, #4f46e5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent:
+            "center",
+          fontSize: "58px",
+        }}
+      >
+        🏛️
+      </div>
+
+      <div
+        style={{
+          padding: "28px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent:
+              "space-between",
+            alignItems:
+              "center",
+          }}
+        >
+          <h3
+            style={{
+              margin: 0,
+              fontSize: "24px",
+              color: "#1e293b",
+            }}
+          >
+            {venue.name}
+          </h3>
+
+          <span
+            style={{
+              background:
+                venue.availability
+                  ? "#dcfce7"
+                  : "#fee2e2",
+
+              color:
+                venue.availability
+                  ? "#166534"
+                  : "#b91c1c",
+
+              padding:
+                "7px 13px",
+
+              borderRadius:
+                "20px",
+
+              fontWeight: 700,
+
+              fontSize:
+                "14px",
+            }}
+          >
+            {venue.availability
+              ? "● Available"
+              : "● Unavailable"}
+          </span>
+        </div>
+
+        <p
+          style={{
+            color: "#64748b",
+            marginTop: "10px",
+          }}
+        >
+          📍 {venue.location}
+        </p>
+
+        <hr
+          style={{
+            border: 0,
+            borderTop:
+              "1px solid #e2e8f0",
+            margin:
+              "24px 0",
+          }}
+        />
+
+        <VenueDetail
+          label="Type"
+          value={venue.type}
+        />
+
+        <VenueDetail
+          label="Capacity"
+          value={`${venue.capacity} guests`}
+        />
+
+        <VenueDetail
+          label="Price"
+          value={`₹${venue.price.toLocaleString(
+            "en-IN"
+          )}`}
+          highlight
+        />
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "1.2fr 1fr",
+            gap: "12px",
+            marginTop: "28px",
+          }}
+        >
+          {/* IMPORTANT: CHOOSE VENUE BUTTON */}
+
+          <button
+            onClick={() =>
+              onChoose(venue)
+            }
+            disabled={
+              !venue.availability
+            }
+            style={{
+              padding:
+                "14px 12px",
+
+              border: "none",
+
+              borderRadius:
+                "9px",
+
+              background:
+                venue.availability
+                  ? "#2563eb"
+                  : "#94a3b8",
+
+              color:
+                "#ffffff",
+
+              fontWeight: 700,
+
+              fontSize:
+                "16px",
+
+              cursor:
+                venue.availability
+                  ? "pointer"
+                  : "not-allowed",
+
+              boxShadow:
+                venue.availability
+                  ? "0 4px 10px rgba(37,99,235,0.25)"
+                  : "none",
+            }}
+          >
+            ↗ Choose Venue
+          </button>
+
+          <button
+            onClick={() =>
+              onDelete(venue.id)
+            }
+            style={{
+              padding:
+                "14px 12px",
+
+              border:
+                "1px solid #fecaca",
+
+              borderRadius:
+                "9px",
+
+              background:
+                "#ffffff",
+
+              color:
+                "#dc2626",
+
+              fontWeight: 700,
+
+              fontSize:
+                "16px",
+
+              cursor:
+                "pointer",
+            }}
+          >
+            🗑 Delete
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/* -------------------------------
+   SMALL COMPONENTS
+-------------------------------- */
+
+function VenueDetail({
+  label,
+  value,
+  highlight = false,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent:
+          "space-between",
+        marginBottom: "16px",
+      }}
+    >
+      <span
+        style={{
+          color: "#64748b",
+          fontSize: "16px",
+        }}
+      >
+        {label}
+      </span>
+
+      <strong
+        style={{
+          color: highlight
+            ? "#2563eb"
+            : "#334155",
+          fontSize: "16px",
+        }}
+      >
+        {value}
+      </strong>
+    </div>
+  );
+}
+
+function StatCard({
+  title,
+  value,
+  color,
+}: {
+  title: string;
+  value: number;
+  color: string;
+}) {
+  return (
+    <div
+      style={{
+        background: "#ffffff",
+        border:
+          "1px solid #e2e8f0",
+        borderRadius: "16px",
+        padding: "26px 30px",
+        boxShadow:
+          "0 4px 12px rgba(15,23,42,0.05)",
+      }}
+    >
+      <p
+        style={{
+          margin: 0,
+          color: "#64748b",
+          fontSize: "16px",
+        }}
+      >
+        {title}
+      </p>
+
+      <h2
+        style={{
+          margin:
+            "12px 0 0",
+          fontSize: "34px",
+          color,
+        }}
+      >
+        {value}
+      </h2>
+    </div>
+  );
+}
+
+function FormField({
+  label,
+  name,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}: {
+  label: string;
+  name: string;
+  value: string;
+  onChange: (
+    event: React.ChangeEvent<
+      HTMLInputElement
+    >
+  ) => void;
+  placeholder: string;
+  type?: string;
+}) {
+  return (
+    <div>
+      <label
+        style={labelStyle}
+      >
+        {label}
+      </label>
+
+      <input
+        type={type}
+        name={name}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        style={inputStyle}
+      />
+    </div>
+  );
+}
+
+/* -------------------------------
+   STYLES
+-------------------------------- */
+
+const navButtonStyle = {
+  border: "none",
+  background: "transparent",
+  color: "#334155",
+  fontSize: "16px",
+  cursor: "pointer",
+};
+
+const labelStyle = {
+  display: "block",
+  marginBottom: "8px",
+  color: "#334155",
+  fontWeight: 700,
+  fontSize: "15px",
+};
+
+const inputStyle = {
+  width: "100%",
+  boxSizing:
+    "border-box" as const,
+  padding: "13px 14px",
+  border:
+    "1px solid #cbd5e1",
+  borderRadius: "8px",
+  fontSize: "16px",
+  color: "#1e293b",
+  background: "#ffffff",
+};

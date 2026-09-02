@@ -1166,146 +1166,51 @@ function TopBar({
   saving: boolean;
   saveScene: () => void;
   viewMode: "2D" | "3D";
-  setViewMode: (
-    mode: "2D" | "3D"
-  ) => void;
+  setViewMode: (mode: "2D" | "3D") => void;
 }) {
   return (
     <header className="topbar">
-      <div className="brand">
-        <div className="brand-icon">
-          W
-        </div>
-
+      <a href="/" className="brand" aria-label="Wedding Planner home">
+        <div className="brand-icon">W</div>
         <div>
-          <div className="brand-title">
-            Wedding Planner
-          </div>
-
-          <div className="brand-subtitle">
-            3D Venue Designer
-          </div>
+          <div className="brand-title">Wedding Planner</div>
+          <div className="brand-subtitle">3D Venue Designer</div>
         </div>
-      </div>
-      <nav
-  style={{
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-  }}
->
-  <a
-    href="/"
-    style={{
-      textDecoration: "none",
-      padding: "10px 14px",
-      borderRadius: "8px",
-      color: "#2563eb",
-      fontWeight: "600",
-    }}
-  >
-    Designer
-  </a>
+      </a>
 
-  <a
-    href="/venues"
-    style={{
-      textDecoration: "none",
-      padding: "10px 14px",
-      borderRadius: "8px",
-      color: "#334155",
-      fontWeight: "600",
-    }}
-  >
-    Venues
-  </a>
-
-  <a
-    href="/inventory"
-    style={{
-      textDecoration: "none",
-      padding: "10px 14px",
-      borderRadius: "8px",
-      color: "#334155",
-      fontWeight: "600",
-    }}
-  >
-    Inventory
-  </a>
-
-  <a
-    href="/match"
-    style={{
-      textDecoration: "none",
-      padding: "10px 14px",
-      borderRadius: "8px",
-      background: "#2563eb",
-      color: "white",
-      fontWeight: "600",
-    }}
-  >
-    Find Matches
-  </a>
-</nav>
-
+      <nav className="main-navigation" aria-label="Main navigation">
+        <a href="/" className="top-nav-link">Designer</a>
+        <a href="/venues" className="top-nav-link">Venues</a>
+        <a href="/inventory" className="top-nav-link">Inventory</a>
+        <a href="/match" className="top-nav-link">Find Matches</a>
+        <a href="/designs" className="top-nav-link">Saved Designs</a>
+      </nav>
 
       <div className="project-title">
-        <div className="project-small">
-          PROJECT
-        </div>
-
-        <div className="project-name">
-          {venue?.name ||
-            "Wedding Venue"}
-        </div>
+        <div className="project-small">PROJECT</div>
+        <div className="project-name">{venue?.name || "Wedding Venue"}</div>
       </div>
 
       <div className="top-actions">
         <span className="saved-status">
-          ●{" "}
-          {saving
-            ? "Saving..."
-            : "Saved"}
+          <span className="status-dot">●</span>{" "}
+          {saving ? "Saving..." : "Saved"}
         </span>
-
-        <button
-          className="save-button"
-          onClick={
-            saveScene
-          }
-        >
-          💾 Save
+        <button type="button" className="save-button" onClick={saveScene} disabled={saving}>
+          {saving ? "Saving..." : "💾 Save"}
         </button>
-
         <div className="view-toggle">
           <button
-            className={
-              viewMode ===
-              "2D"
-                ? "view-active"
-                : ""
-            }
-            onClick={() =>
-              setViewMode(
-                "2D"
-              )
-            }
+            type="button"
+            className={viewMode === "2D" ? "view-active" : ""}
+            onClick={() => setViewMode("2D")}
           >
             2D
           </button>
-
           <button
-            className={
-              viewMode ===
-              "3D"
-                ? "view-active"
-                : ""
-            }
-            onClick={() =>
-              setViewMode(
-                "3D"
-              )
-            }
+            type="button"
+            className={viewMode === "3D" ? "view-active" : ""}
+            onClick={() => setViewMode("3D")}
           >
             3D
           </button>
@@ -2068,6 +1973,63 @@ export default function Home() {
     inventoryLoading,
     setInventoryLoading,
   ] = useState(true);
+  /* =======================================================
+   LOAD INVENTORY
+======================================================= */
+
+useEffect(() => {
+  let cancelled = false;
+
+  async function loadInventory() {
+    try {
+      setInventoryLoading(true);
+
+      const response = await fetch(
+        "/api/inventory",
+        {
+          cache: "no-store",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.details ||
+            data.error ||
+            "Failed to load inventory"
+        );
+      }
+
+      if (!cancelled) {
+        setInventory(
+          Array.isArray(data)
+            ? data
+            : []
+        );
+      }
+    } catch (error) {
+      console.error(
+        "Failed to load inventory:",
+        error
+      );
+
+      if (!cancelled) {
+        setInventory([]);
+      }
+    } finally {
+      if (!cancelled) {
+        setInventoryLoading(false);
+      }
+    }
+  }
+
+  loadInventory();
+
+  return () => {
+    cancelled = true;
+  };
+}, []);
 
   /* =======================================================
      PLACED ITEMS
@@ -2258,67 +2220,338 @@ export default function Home() {
     loadVenue();
   }, []);
 
-  /* =======================================================
-     LOAD INVENTORY
-  ======================================================= */
+/* =======================================================
+   LOAD EDITOR
+======================================================= */
 
-  useEffect(() => {
-    async function loadInventory() {
-      try {
-        setInventoryLoading(
-          true
-        );
+useEffect(() => {
+  const params =
+    new URLSearchParams(
+      window.location.search
+    );
 
-        const response =
-          await fetch(
-            "/api/inventory"
+  const venueIdParam =
+    params.get(
+      "venueId"
+    );
+
+  const designIdParam =
+    params.get(
+      "designId"
+    );
+
+  async function loadEditor() {
+    try {
+      setLoading(true);
+
+      setError("");
+
+      let loadedVenue:
+        | Venue
+        | null =
+        null;
+
+      /*
+       * ============================================
+       * LOAD VENUE FROM URL
+       * ============================================
+       */
+
+      if (venueIdParam) {
+        const venueId =
+          Number(
+            venueIdParam
           );
 
-        if (!response.ok) {
-          throw new Error(
-            "Failed to load inventory"
+        if (
+          Number.isInteger(
+            venueId
+          ) &&
+          venueId > 0
+        ) {
+          const response =
+            await fetch(
+              `/api/venues?id=${venueId}`
+            );
+
+          if (!response.ok) {
+            throw new Error(
+              "Failed to load venue"
+            );
+          }
+
+          const data =
+            await response.json();
+
+          loadedVenue =
+            Array.isArray(data)
+              ? data.find(
+                  (
+                    item: Venue
+                  ) =>
+                    item.id ===
+                    venueId
+                ) ||
+                null
+              : data;
+
+          if (loadedVenue) {
+            setVenue(
+              loadedVenue
+            );
+
+            /*
+             * Keep localStorage updated.
+             */
+            localStorage.setItem(
+              "selectedVenue",
+              JSON.stringify(
+                loadedVenue
+              )
+            );
+
+            localStorage.setItem(
+              "selectedVenueId",
+              String(
+                loadedVenue.id
+              )
+            );
+          }
+        }
+      }
+
+      /*
+       * ============================================
+       * FALLBACK: LOAD VENUE FROM LOCAL STORAGE
+       * ============================================
+       *
+       * This supports previously selected venues
+       * and protects us if the URL has no venueId.
+       */
+
+      if (!loadedVenue) {
+        const storedVenue =
+          localStorage.getItem(
+            "selectedVenue"
+          );
+
+        if (storedVenue) {
+          try {
+            const parsedVenue =
+              JSON.parse(
+                storedVenue
+              ) as Venue;
+
+            if (
+              parsedVenue &&
+              typeof parsedVenue.id ===
+                "number"
+            ) {
+              loadedVenue =
+                parsedVenue;
+
+              setVenue(
+                parsedVenue
+              );
+            }
+          } catch {
+            console.error(
+              "Unable to read selected venue."
+            );
+
+            localStorage.removeItem(
+              "selectedVenue"
+            );
+
+            localStorage.removeItem(
+              "selectedVenueId"
+            );
+          }
+        }
+      }
+
+      /*
+       * ============================================
+       * LOAD SAVED DESIGN
+       * ============================================
+       */
+
+      if (designIdParam) {
+        const designId =
+          Number(
+            designIdParam
+          );
+
+        if (
+          Number.isInteger(
+            designId
+          ) &&
+          designId > 0
+        ) {
+          const response =
+            await fetch(
+              `/api/designs?id=${designId}`
+            );
+
+          if (!response.ok) {
+            throw new Error(
+              "Failed to load saved design"
+            );
+          }
+
+          const design =
+            await response.json();
+
+          /*
+           * If the design has a venue
+           * but we have not loaded one yet,
+           * load that venue automatically.
+           */
+
+          if (
+            !loadedVenue &&
+            design.venueId
+          ) {
+            const venueResponse =
+              await fetch(
+                `/api/venues?id=${design.venueId}`
+              );
+
+            if (
+              venueResponse.ok
+            ) {
+              const venueData =
+                await venueResponse.json();
+
+              loadedVenue =
+                Array.isArray(
+                  venueData
+                )
+                  ? venueData.find(
+                      (
+                        item: Venue
+                      ) =>
+                        item.id ===
+                        design.venueId
+                    ) ||
+                    null
+                  : venueData;
+
+              if (
+                loadedVenue
+              ) {
+                setVenue(
+                  loadedVenue
+                );
+
+                localStorage.setItem(
+                  "selectedVenue",
+                  JSON.stringify(
+                    loadedVenue
+                  )
+                );
+
+                localStorage.setItem(
+                  "selectedVenueId",
+                  String(
+                    loadedVenue.id
+                  )
+                );
+              }
+            }
+          }
+
+          /*
+           * Load the saved furniture.
+           */
+
+          try {
+            const saved =
+              JSON.parse(
+                design.layoutData
+              );
+
+            if (
+              Array.isArray(
+                saved.items
+              )
+            ) {
+              setItems(
+                saved.items
+              );
+
+              setSelectedId(
+                saved.items.length >
+                  0
+                  ? saved.items[0].id
+                  : null
+              );
+            }
+          } catch {
+            throw new Error(
+              "Saved design contains invalid layout data"
+            );
+          }
+
+          return;
+        }
+      }
+
+      /*
+       * ============================================
+       * LOAD VENUE'S NORMAL LAYOUT
+       * ============================================
+       */
+
+      if (
+        loadedVenue?.layoutData
+      ) {
+        try {
+          const saved =
+            JSON.parse(
+              loadedVenue.layoutData
+            );
+
+          if (
+            Array.isArray(
+              saved.items
+            )
+          ) {
+            setItems(
+              saved.items
+            );
+
+            setSelectedId(
+              saved.items.length >
+                0
+                ? saved.items[0].id
+                : null
+            );
+          }
+        } catch {
+          console.log(
+            "No valid saved venue layout."
           );
         }
-
-        const data =
-          await response.json();
-
-        /*
-           Our API returns the
-           inventory array directly.
-
-           This fallback also supports
-           { inventory: [...] }.
-        */
-
-        const inventoryData =
-          Array.isArray(data)
-            ? data
-            : Array.isArray(
-                data?.inventory
-              )
-            ? data.inventory
-            : [];
-
-        setInventory(
-          inventoryData
-        );
-      } catch (err) {
-        console.error(
-          "Inventory loading error:",
-          err
-        );
-
-        setInventory([]);
-      } finally {
-        setInventoryLoading(
-          false
-        );
       }
-    }
+    } catch (err) {
+      console.error(
+        "Unable to load editor:",
+        err
+      );
 
-    loadInventory();
-  }, []);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load editor."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  loadEditor();
+}, []);
 
   /* =======================================================
      KEYBOARD CONTROLS
@@ -3328,111 +3561,165 @@ export default function Home() {
         ===================================================== */
 
         .topbar {
-          height: 68px;
+          min-height: 76px;
           flex-shrink: 0;
-          display: flex;
+          display: grid;
+          grid-template-columns: minmax(200px, 1fr) auto minmax(150px, 0.8fr) auto;
           align-items: center;
-          justify-content: space-between;
-          padding: 0 20px;
-          background: white;
+          gap: 18px;
+          padding: 0 22px;
+          background: #ffffff;
           border-bottom: 1px solid #dfe2e6;
+          box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
           z-index: 30;
         }
 
         .brand {
           display: flex;
           align-items: center;
-          gap: 10px;
-          min-width: 230px;
+          gap: 11px;
+          min-width: 0;
+          text-decoration: none;
+          color: inherit;
         }
 
         .brand-icon {
-          width: 36px;
-          height: 36px;
-          border-radius: 8px;
+          width: 40px;
+          height: 40px;
+          flex-shrink: 0;
+          border-radius: 10px;
           background: #2563eb;
           color: white;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 18px;
+          font-size: 19px;
           font-weight: 900;
+          box-shadow: 0 6px 16px rgba(37, 99, 235, 0.2);
         }
 
         .brand-title {
-          font-size: 15px;
+          font-size: 16px;
           font-weight: 900;
           color: #1f2937;
+          letter-spacing: 0.1px;
         }
 
         .brand-subtitle {
           font-size: 10px;
-          color: #8993a0;
-          margin-top: 2px;
+          color: #64748b;
+          margin-top: 3px;
+          font-weight: 600;
+        }
+
+        .main-navigation {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          padding: 5px;
+          border: 1px solid #e2e8f0;
+          background: #f8fafc;
+          border-radius: 12px;
+          white-space: nowrap;
+        }
+
+        .top-nav-link {
+          text-decoration: none;
+          color: #334155;
+          padding: 9px 12px;
+          border-radius: 8px;
+          font-size: 12px;
+          font-weight: 800;
+          transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+        }
+
+        .top-nav-link:hover {
+          background: #2563eb;
+          color: #ffffff;
+          transform: translateY(-1px);
         }
 
         .project-title {
           text-align: center;
+          min-width: 0;
         }
 
         .project-small {
-          font-size: 8px;
-          color: #9ca3af;
+          font-size: 9px;
+          color: #94a3b8;
           font-weight: 800;
-          letter-spacing: 1px;
+          letter-spacing: 1.2px;
         }
 
         .project-name {
-          font-size: 13px;
-          font-weight: 800;
-          color: #374151;
+          font-size: 14px;
+          font-weight: 900;
+          color: #334155;
           margin-top: 3px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         .top-actions {
-          min-width: 230px;
           display: flex;
           align-items: center;
           justify-content: flex-end;
           gap: 10px;
+          white-space: nowrap;
         }
 
         .saved-status {
-          font-size: 10px;
-          color: #16a34a;
-          font-weight: 700;
-        }
-
-        .save-button {
-          border: 1px solid #bfdbfe;
-          background: #eff6ff;
-          color: #1d4ed8;
-          border-radius: 7px;
-          padding: 8px 12px;
-          cursor: pointer;
           font-size: 11px;
+          color: #15803d;
           font-weight: 800;
         }
 
-        .save-button:hover {
-          background: #dbeafe;
+        .status-dot {
+          font-size: 10px;
+        }
+
+        .save-button {
+          border: none;
+          background: #2563eb;
+          color: #ffffff;
+          border-radius: 8px;
+          padding: 10px 14px;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 800;
+          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.22);
+          transition: background 0.18s ease, transform 0.18s ease;
+        }
+
+        .save-button:hover:not(:disabled) {
+          background: #1d4ed8;
+          transform: translateY(-1px);
+        }
+
+        .save-button:disabled {
+          opacity: 0.7;
+          cursor: wait;
         }
 
         .view-toggle {
           display: flex;
           border: 1px solid #d7dce2;
-          border-radius: 7px;
+          border-radius: 8px;
           overflow: hidden;
+          background: #f8fafc;
         }
 
         .view-toggle button {
           border: none;
-          background: white;
-          padding: 7px 11px;
+          background: transparent;
+          padding: 9px 12px;
           cursor: pointer;
-          font-size: 10px;
+          font-size: 11px;
           font-weight: 800;
-          color: #6b7280;
+          color: #64748b;
+          transition: background 0.18s ease, color 0.18s ease;
         }
 
         .view-toggle button + button {
@@ -3441,7 +3728,7 @@ export default function Home() {
 
         .view-toggle .view-active {
           background: #2563eb;
-          color: white;
+          color: #ffffff;
         }
 
         /* =====================================================
@@ -3975,6 +4262,58 @@ export default function Home() {
 
           .project-title {
             display: none;
+          }
+        }
+
+        @media (max-width: 1250px) {
+          .topbar {
+            grid-template-columns: auto 1fr auto;
+          }
+
+          .project-title {
+            display: none;
+          }
+
+          .main-navigation {
+            overflow-x: auto;
+            justify-content: flex-start;
+          }
+        }
+
+        @media (max-width: 900px) {
+          .topbar {
+            min-height: auto;
+            grid-template-columns: 1fr auto;
+            padding: 10px 14px;
+          }
+
+          .main-navigation {
+            grid-column: 1 / -1;
+            grid-row: 2;
+            width: 100%;
+          }
+
+          .saved-status {
+            display: none;
+          }
+        }
+
+        @media (max-width: 620px) {
+          .brand-subtitle {
+            display: none;
+          }
+
+          .brand-title {
+            font-size: 14px;
+          }
+
+          .top-nav-link {
+            padding: 8px 10px;
+            font-size: 11px;
+          }
+
+          .save-button {
+            padding: 9px 11px;
           }
         }
       `}</style>

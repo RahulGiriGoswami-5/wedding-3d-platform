@@ -7,13 +7,67 @@ function cleanString(value: unknown): string {
     : "";
 }
 
-// GET — Get all saved designs
-export async function GET() {
+/* =========================================================
+   GET — GET ALL DESIGNS OR ONE DESIGN
+========================================================= */
+
+export async function GET(
+  request: Request
+) {
   try {
+    const { searchParams } =
+      new URL(request.url);
+
+    const idParam =
+      searchParams.get("id");
+
+    if (idParam) {
+      const id =
+        Number(idParam);
+
+      if (
+        !Number.isInteger(id) ||
+        id <= 0
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Valid design ID is required",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      const design =
+        await db.orm.public.SavedDesign.first({
+          id,
+        });
+
+      if (!design) {
+        return NextResponse.json(
+          {
+            error:
+              "Saved design not found",
+          },
+          {
+            status: 404,
+          }
+        );
+      }
+
+      return NextResponse.json(
+        design
+      );
+    }
+
     const designs =
       await db.orm.public.SavedDesign.all();
 
-    return NextResponse.json(designs);
+    return NextResponse.json(
+      designs
+    );
   } catch (error) {
     console.error(
       "Saved design GET error:",
@@ -22,7 +76,8 @@ export async function GET() {
 
     return NextResponse.json(
       {
-        error: "Failed to fetch saved designs",
+        error:
+          "Failed to fetch saved designs",
       },
       {
         status: 500,
@@ -31,12 +86,16 @@ export async function GET() {
   }
 }
 
-// POST — Create a saved design
+/* =========================================================
+   POST — CREATE SAVED DESIGN
+========================================================= */
+
 export async function POST(
   request: Request
 ) {
   try {
-    const body = await request.json();
+    const body =
+      await request.json();
 
     const name =
       cleanString(body.name);
@@ -52,7 +111,9 @@ export async function POST(
         : Number(body.themeId);
 
     const layoutData =
-      cleanString(body.layoutData);
+      cleanString(
+        body.layoutData
+      );
 
     if (!name) {
       return NextResponse.json(
@@ -67,7 +128,9 @@ export async function POST(
     }
 
     if (
-      !Number.isInteger(venueId) ||
+      !Number.isInteger(
+        venueId
+      ) ||
       venueId <= 0
     ) {
       return NextResponse.json(
@@ -84,7 +147,9 @@ export async function POST(
     if (
       themeId !== null &&
       (
-        !Number.isInteger(themeId) ||
+        !Number.isInteger(
+          themeId
+        ) ||
         themeId <= 0
       )
     ) {
@@ -119,7 +184,8 @@ export async function POST(
     if (!venue) {
       return NextResponse.json(
         {
-          error: "Venue not found",
+          error:
+            "Venue not found",
         },
         {
           status: 404,
@@ -127,7 +193,9 @@ export async function POST(
       );
     }
 
-    if (themeId !== null) {
+    if (
+      themeId !== null
+    ) {
       const theme =
         await db.orm.public.Theme.first({
           id: themeId,
@@ -136,7 +204,8 @@ export async function POST(
       if (!theme) {
         return NextResponse.json(
           {
-            error: "Theme not found",
+            error:
+              "Theme not found",
           },
           {
             status: 404,
@@ -177,12 +246,125 @@ export async function POST(
   }
 }
 
-// DELETE — Delete a saved design
+/* =========================================================
+   PUT — UPDATE SAVED DESIGN
+========================================================= */
+
+export async function PUT(
+  request: Request
+) {
+  try {
+    const body =
+      await request.json();
+
+    const id =
+      Number(body.id);
+
+    if (
+      !Number.isInteger(id) ||
+      id <= 0
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Valid design ID is required",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const existingDesign =
+      await db.orm.public.SavedDesign.first({
+        id,
+      });
+
+    if (!existingDesign) {
+      return NextResponse.json(
+        {
+          error:
+            "Saved design not found",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
+    const name =
+      cleanString(
+        body.name
+      );
+
+    const layoutData =
+      cleanString(
+        body.layoutData
+      );
+
+    if (!name) {
+      return NextResponse.json(
+        {
+          error:
+            "Design name is required",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (!layoutData) {
+      return NextResponse.json(
+        {
+          error:
+            "Design layout data is required",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const updatedDesign =
+      await db.orm.public.SavedDesign
+        .where({ id })
+        .update({
+          name,
+          layoutData,
+        });
+
+    return NextResponse.json(
+      updatedDesign
+    );
+  } catch (error) {
+    console.error(
+      "Saved design PUT error:",
+      error
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          "Failed to update saved design",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
+}
+
+/* =========================================================
+   DELETE — DELETE SAVED DESIGN
+========================================================= */
+
 export async function DELETE(
   request: Request
 ) {
   try {
-    const body = await request.json();
+    const body =
+      await request.json();
 
     const id =
       Number(body.id);

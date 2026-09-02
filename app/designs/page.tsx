@@ -45,6 +45,7 @@ export default function DesignsPage() {
   async function loadData() {
     try {
       setLoading(true);
+      setMessage("");
 
       const [
         designsResponse,
@@ -58,7 +59,7 @@ export default function DesignsPage() {
 
       if (!designsResponse.ok) {
         throw new Error(
-          "Failed to load saved designs"
+          "Failed to load saved designs."
         );
       }
 
@@ -75,9 +76,23 @@ export default function DesignsPage() {
           ? await themesResponse.json()
           : [];
 
-      setDesigns(designsData);
-      setVenues(venuesData);
-      setThemes(themesData);
+      setDesigns(
+        Array.isArray(designsData)
+          ? designsData
+          : []
+      );
+
+      setVenues(
+        Array.isArray(venuesData)
+          ? venuesData
+          : []
+      );
+
+      setThemes(
+        Array.isArray(themesData)
+          ? themesData
+          : []
+      );
     } catch (error) {
       console.error(
         "Failed to load designs:",
@@ -85,7 +100,9 @@ export default function DesignsPage() {
       );
 
       setMessage(
-        "Unable to load saved designs."
+        error instanceof Error
+          ? error.message
+          : "Unable to load saved designs."
       );
     } finally {
       setLoading(false);
@@ -101,13 +118,27 @@ export default function DesignsPage() {
   ) {
     const venue =
       venues.find(
-        (item) =>
+        item =>
           item.id === venueId
       );
 
     return venue
       ? venue.name
       : `Venue #${venueId}`;
+  }
+
+  function getVenueLocation(
+    venueId: number
+  ) {
+    const venue =
+      venues.find(
+        item =>
+          item.id === venueId
+      );
+
+    return venue
+      ? venue.location
+      : "";
   }
 
   function getThemeName(
@@ -119,7 +150,7 @@ export default function DesignsPage() {
 
     const theme =
       themes.find(
-        (item) =>
+        item =>
           item.id === themeId
       );
 
@@ -128,12 +159,32 @@ export default function DesignsPage() {
       : `Theme #${themeId}`;
   }
 
+  function formatDate(
+    dateValue: string
+  ) {
+    const date =
+      new Date(dateValue);
+
+    if (Number.isNaN(date.getTime())) {
+      return "Unknown date";
+    }
+
+    return date.toLocaleDateString(
+      "en-IN",
+      {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }
+    );
+  }
+
   async function deleteDesign(
     id: number
   ) {
     const confirmed =
       window.confirm(
-        "Delete this saved design?"
+        "Are you sure you want to delete this saved design?"
       );
 
     if (!confirmed) {
@@ -164,25 +215,98 @@ export default function DesignsPage() {
       if (!response.ok) {
         throw new Error(
           data.error ||
-            "Failed to delete design"
+            "Failed to delete design."
         );
       }
 
-      setDesigns((current) =>
-        current.filter(
-          (design) =>
-            design.id !== id
-        )
+      setDesigns(
+        current =>
+          current.filter(
+            design =>
+              design.id !== id
+          )
       );
 
       setMessage(
         "Design deleted successfully."
       );
     } catch (error) {
+      console.error(
+        "Delete design error:",
+        error
+      );
+
       setMessage(
         error instanceof Error
           ? error.message
           : "Failed to delete design."
+      );
+    }
+  }
+
+  async function duplicateDesign(
+    design: SavedDesign
+  ) {
+    try {
+      setMessage("");
+
+      const response =
+        await fetch(
+          "/api/designs",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              name:
+                `Copy of ${design.name}`,
+
+              venueId:
+                design.venueId,
+
+              themeId:
+                design.themeId,
+
+              layoutData:
+                design.layoutData,
+            }),
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            "Failed to duplicate design."
+        );
+      }
+
+      setDesigns(
+        current => [
+          data,
+          ...current,
+        ]
+      );
+
+      setMessage(
+        "Design duplicated successfully."
+      );
+    } catch (error) {
+      console.error(
+        "Duplicate design error:",
+        error
+      );
+
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to duplicate design."
       );
     }
   }
@@ -195,11 +319,13 @@ export default function DesignsPage() {
             WEDDING 3D PLATFORM
           </p>
 
-          <h1>Saved Designs</h1>
+          <h1>
+            Saved Designs
+          </h1>
 
           <p className="subtitle">
-            Manage your saved wedding
-            designs and layouts.
+            Manage, duplicate and reopen
+            your wedding designs.
           </p>
         </div>
 
@@ -219,24 +345,49 @@ export default function DesignsPage() {
           <Link href="/themes">
             Themes
           </Link>
+
+          <button
+            onClick={loadData}
+            type="button"
+          >
+            Refresh
+          </button>
         </nav>
       </header>
 
       {message && (
-        <p className="message">
+        <div className="message">
           {message}
-        </p>
+
+          <button
+            onClick={() =>
+              setMessage("")
+            }
+            type="button"
+          >
+            ×
+          </button>
+        </div>
       )}
 
       <section className="designsSection">
         <div className="sectionHeading">
-          <h2>Your Saved Designs</h2>
+          <div>
+            <h2>
+              Your Saved Designs
+            </h2>
 
-          <span>
-            {designs.length} design
+            <p>
+              Reopen a saved layout and
+              continue editing it.
+            </p>
+          </div>
+
+          <span className="designCount">
+            {designs.length}{" "}
             {designs.length === 1
-              ? ""
-              : "s"}
+              ? "design"
+              : "designs"}
           </span>
         </div>
 
@@ -246,22 +397,42 @@ export default function DesignsPage() {
           </div>
         ) : designs.length === 0 ? (
           <div className="emptyState">
-            No saved designs yet.
-            <br />
-            Create a design in the
-            3D Designer first.
+            <div className="emptyIcon">
+              3D
+            </div>
+
+            <h3>
+              No saved designs yet
+            </h3>
+
+            <p>
+              Create a design in the
+              3D Designer and save it
+              to see it here.
+            </p>
+
+            <Link
+              className="createButton"
+              href="/"
+            >
+              Open 3D Designer
+            </Link>
           </div>
         ) : (
           <div className="designGrid">
             {designs.map(
-              (design) => (
+              design => (
                 <article
                   className="designCard"
                   key={design.id}
                 >
                   <div className="designPreview">
-                    <span>
+                    <div className="previewBadge">
                       3D
+                    </div>
+
+                    <span>
+                      Saved Design
                     </span>
                   </div>
 
@@ -270,37 +441,71 @@ export default function DesignsPage() {
                       {design.name}
                     </h3>
 
-                    <p>
-                      <strong>
-                        Venue:
-                      </strong>{" "}
-                      {getVenueName(
-                        design.venueId
-                      )}
-                    </p>
+                    <div className="infoRow">
+                      <span>
+                        Venue
+                      </span>
 
-                    <p>
                       <strong>
-                        Theme:
-                      </strong>{" "}
-                      {getThemeName(
-                        design.themeId
-                      )}
-                    </p>
+                        {getVenueName(
+                          design.venueId
+                        )}
+                      </strong>
+                    </div>
+
+                    {getVenueLocation(
+                      design.venueId
+                    ) && (
+                      <div className="location">
+                        📍{" "}
+                        {getVenueLocation(
+                          design.venueId
+                        )}
+                      </div>
+                    )}
+
+                    <div className="infoRow">
+                      <span>
+                        Theme
+                      </span>
+
+                      <strong>
+                        {getThemeName(
+                          design.themeId
+                        )}
+                      </strong>
+                    </div>
 
                     <p className="date">
-                      Saved:{" "}
-                      {new Date(
+                      Saved on{" "}
+                      {formatDate(
                         design.createdAt
-                      ).toLocaleDateString()}
+                      )}
                     </p>
 
                     <div className="cardButtons">
                       <Link
-                        href={`/?venueId=${design.venueId}`}
+                        className="openButton"
+                        href={
+                          design.themeId !== null
+                            ? `/?venueId=${design.venueId}&designId=${design.id}&themeId=${design.themeId}`
+                            : `/?venueId=${design.venueId}&designId=${design.id}`
+                        }
                       >
                         Open Design
                       </Link>
+
+                      <button
+                        className="duplicateButton"
+                        onClick={() =>
+                          duplicateDesign(
+                            design
+                          )
+                        }
+                        type="button"
+                      >
+                        Duplicate
+                      </button>
 
                       <button
                         className="deleteButton"
@@ -309,6 +514,7 @@ export default function DesignsPage() {
                             design.id
                           )
                         }
+                        type="button"
                       >
                         Delete
                       </button>
@@ -324,60 +530,98 @@ export default function DesignsPage() {
       <style jsx>{`
         .page {
           min-height: 100vh;
-          background: #f4f7fb;
-          color: #182230;
           padding: 32px;
+          background:
+            linear-gradient(
+              135deg,
+              #f8fafc,
+              #eef2ff
+            );
+          color: #182230;
         }
 
         .header {
           max-width: 1400px;
           margin: 0 auto 32px;
           display: flex;
-          justify-content: space-between;
+          justify-content:
+            space-between;
+          align-items:
+            flex-start;
           gap: 24px;
-          align-items: flex-start;
         }
 
         .eyebrow {
+          margin: 0 0 8px;
           color: #2563eb;
           font-size: 12px;
           font-weight: 800;
           letter-spacing: 1.5px;
-          margin-bottom: 8px;
         }
 
         h1 {
           margin: 0;
-          font-size: 32px;
+          font-size: 36px;
+          color: #172033;
         }
 
         .subtitle {
+          margin: 10px 0 0;
           color: #64748b;
-          margin-top: 10px;
+          font-size: 16px;
         }
 
         .navigation {
           display: flex;
           flex-wrap: wrap;
+          justify-content:
+            flex-end;
           gap: 10px;
         }
 
-        .navigation a {
-          background: white;
-          border: 1px solid #dbe3ef;
-          padding: 10px 14px;
-          border-radius: 8px;
-          text-decoration: none;
+        .navigation a,
+        .navigation button {
+          padding: 11px 16px;
+          border-radius: 9px;
+          border:
+            1px solid #d8e0ec;
+          background: #ffffff;
           color: #334155;
-          font-weight: 600;
+          font-weight: 700;
+          text-decoration: none;
+          cursor: pointer;
+          font-size: 14px;
+        }
+
+        .navigation a:hover,
+        .navigation button:hover {
+          background: #eff6ff;
+          border-color: #2563eb;
+          color: #2563eb;
         }
 
         .message {
           max-width: 1400px;
           margin: 0 auto 20px;
-          padding: 12px;
-          background: white;
-          border-radius: 8px;
+          padding: 14px 18px;
+          border-radius: 10px;
+          background: #ecfdf5;
+          border:
+            1px solid #a7f3d0;
+          color: #065f46;
+          font-weight: 600;
+          display: flex;
+          justify-content:
+            space-between;
+          align-items: center;
+        }
+
+        .message button {
+          border: none;
+          background: transparent;
+          color: #065f46;
+          font-size: 22px;
+          cursor: pointer;
         }
 
         .designsSection {
@@ -387,17 +631,29 @@ export default function DesignsPage() {
 
         .sectionHeading {
           display: flex;
-          justify-content: space-between;
+          justify-content:
+            space-between;
           align-items: center;
-          margin-bottom: 20px;
+          margin-bottom: 22px;
         }
 
         .sectionHeading h2 {
           margin: 0;
+          font-size: 26px;
+          color: #172033;
         }
 
-        .sectionHeading span {
+        .sectionHeading p {
+          margin: 7px 0 0;
           color: #64748b;
+        }
+
+        .designCount {
+          padding: 8px 14px;
+          border-radius: 999px;
+          background: #dbeafe;
+          color: #1d4ed8;
+          font-weight: 700;
         }
 
         .designGrid {
@@ -405,93 +661,269 @@ export default function DesignsPage() {
           grid-template-columns:
             repeat(
               auto-fill,
-              minmax(280px, 1fr)
+              minmax(300px, 1fr)
             );
-          gap: 20px;
+          gap: 22px;
         }
 
         .designCard {
-          background: white;
-          border-radius: 12px;
           overflow: hidden;
-          border: 1px solid #e2e8f0;
+          background: #ffffff;
+          border:
+            1px solid #dbe3ef;
+          border-radius: 16px;
+          box-shadow:
+            0 8px 24px
+            rgba(
+              15,
+              23,
+              42,
+              0.08
+            );
+          transition:
+            transform 0.2s ease,
+            box-shadow 0.2s ease;
+        }
+
+        .designCard:hover {
+          transform:
+            translateY(-4px);
+          box-shadow:
+            0 14px 32px
+            rgba(
+              15,
+              23,
+              42,
+              0.12
+            );
         }
 
         .designPreview {
-          height: 140px;
-          background: linear-gradient(
-            135deg,
-            #dbeafe,
-            #ede9fe
-          );
+          height: 150px;
+          background:
+            linear-gradient(
+              135deg,
+              #2563eb,
+              #4f46e5
+            );
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          color: white;
+        }
+
+        .previewBadge {
+          width: 62px;
+          height: 62px;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 32px;
-          font-weight: 800;
-          color: #475569;
+          border-radius: 16px;
+          background:
+            rgba(
+              255,
+              255,
+              255,
+              0.2
+            );
+          border:
+            1px solid
+            rgba(
+              255,
+              255,
+              255,
+              0.3
+            );
+          font-size: 22px;
+          font-weight: 900;
+        }
+
+        .designPreview span {
+          font-size: 14px;
+          font-weight: 700;
         }
 
         .designContent {
-          padding: 20px;
+          padding: 22px;
         }
 
         .designContent h3 {
-          margin-top: 0;
-          margin-bottom: 16px;
+          margin: 0 0 20px;
+          color: #172033;
+          font-size: 21px;
         }
 
-        .designContent p {
+        .infoRow {
+          display: flex;
+          justify-content:
+            space-between;
+          align-items: center;
+          gap: 15px;
+          padding: 10px 0;
+          border-bottom:
+            1px solid #eef2f7;
+        }
+
+        .infoRow span {
           color: #64748b;
-          margin: 8px 0;
+          font-size: 14px;
+        }
+
+        .infoRow strong {
+          color: #243047;
+          text-align: right;
+        }
+
+        .location {
+          margin: 9px 0;
+          color: #64748b;
+          font-size: 14px;
         }
 
         .date {
+          margin: 16px 0 0;
+          color: #94a3b8;
           font-size: 13px;
         }
 
         .cardButtons {
-          display: flex;
-          gap: 10px;
+          display: grid;
+          grid-template-columns:
+            repeat(3, 1fr);
+          gap: 8px;
           margin-top: 20px;
         }
 
         .cardButtons a,
         .cardButtons button {
-          flex: 1;
-          padding: 10px;
-          border-radius: 7px;
+          padding: 11px 8px;
+          border-radius: 8px;
           border: none;
           cursor: pointer;
           text-align: center;
           text-decoration: none;
-          background: #2563eb;
-          color: white;
-          font-weight: 600;
+          font-size: 13px;
+          font-weight: 700;
         }
 
-        .cardButtons .deleteButton {
-          background: #dc2626;
+        .openButton {
+          background: #2563eb;
+          color: white;
+        }
+
+        .duplicateButton {
+          background: #475569;
+          color: white;
+        }
+
+        .deleteButton {
+          background: #fff1f2;
+          color: #dc2626;
+          border:
+            1px solid #fecaca !important;
+        }
+
+        .openButton:hover {
+          background: #1d4ed8;
+        }
+
+        .duplicateButton:hover {
+          background: #334155;
+        }
+
+        .deleteButton:hover {
+          background: #fee2e2;
         }
 
         .emptyState {
-          background: white;
-          border: 1px dashed #cbd5e1;
-          border-radius: 12px;
-          padding: 60px 20px;
+          padding: 70px 20px;
           text-align: center;
+          background: white;
+          border:
+            2px dashed #cbd5e1;
+          border-radius: 16px;
           color: #64748b;
         }
 
+        .emptyIcon {
+          width: 70px;
+          height: 70px;
+          margin: 0 auto 18px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 18px;
+          background: #dbeafe;
+          color: #2563eb;
+          font-size: 22px;
+          font-weight: 900;
+        }
+
+        .emptyState h3 {
+          margin: 0 0 10px;
+          color: #334155;
+        }
+
+        .emptyState p {
+          margin-bottom: 25px;
+        }
+
+        .createButton {
+          display: inline-block;
+          padding: 12px 18px;
+          border-radius: 8px;
+          background: #2563eb;
+          color: white;
+          text-decoration: none;
+          font-weight: 700;
+        }
+
         @media (
-          max-width: 700px
+          max-width: 800px
         ) {
           .page {
             padding: 20px;
           }
 
-          .header {
+          .header,
+          .sectionHeading {
             flex-direction: column;
+            align-items:
+              flex-start;
+          }
+
+          .navigation {
+            justify-content:
+              flex-start;
+          }
+        }
+
+        @media (
+          max-width: 500px
+        ) {
+          .page {
+            padding: 15px;
+          }
+
+          h1 {
+            font-size: 28px;
+          }
+
+          .cardButtons {
+            grid-template-columns:
+              1fr;
+          }
+
+          .navigation {
+            width: 100%;
+          }
+
+          .navigation a,
+          .navigation button {
+            flex: 1;
+            text-align: center;
           }
         }
       `}</style>
