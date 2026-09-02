@@ -8,7 +8,7 @@ import {
   OrthographicCamera,
   useGLTF,
 } from "@react-three/drei";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 
 /* =========================================================
@@ -35,48 +35,9 @@ type ElementType =
   | "flowers"
   | "lamp";
 
-/*
-   InventoryItem comes directly from our
-   /api/inventory endpoint.
-
-   These are the same fields we created
-   in the Prisma 8 contract.
-*/
-type InventoryItem = {
-  id: number;
-  name: string;
-  category: string;
-  modelUrl: string;
-  imageUrl: string | null;
-  width: number;
-  depth: number;
-  height: number;
-  quantity: number;
-  availableQuantity: number;
-  price: number;
-};
-
-/*
-   FurnitureItem is the object actually placed
-   inside the venue editor.
-
-   inventoryId tells us which inventory item
-   this object came from.
-*/
 type FurnitureItem = {
   id: number;
-  inventoryId?: number;
-
   type: ElementType;
-
-  name?: string;
-  modelUrl?: string;
-  imageUrl?: string | null;
-
-  width?: number;
-  depth?: number;
-  height?: number;
-
   position: [number, number, number];
   rotation: number;
 };
@@ -85,125 +46,9 @@ type SavedScene = {
   items: FurnitureItem[];
 };
 
-
-type MatchedDesignPayload = {
-  version?: number;
-  venueId?: number | string;
-  inventory?: InventoryItem[];
-  clientRequirements?: Record<string, unknown>;
-};
-
 /* =========================================================
-   PHASE 5 MATCHED-DESIGN HELPERS
-
-   These helpers are deliberately defensive. A stale or invalid
-   localStorage handoff must never stop the 3D Designer from opening.
+   REAL-LIFE DIMENSIONS
 ========================================================= */
-
-function getMatchedElementType(category: unknown, name: unknown): ElementType {
-  const text = `${String(category ?? "")} ${String(name ?? "")}`.toLowerCase();
-
-  if (text.includes("chair")) return "chair";
-  if (text.includes("table")) return "table";
-  if (text.includes("sofa") || text.includes("couch")) return "sofa";
-  if (text.includes("stage") || text.includes("mandap") || text.includes("platform")) return "stage";
-  if (text.includes("flower") || text.includes("floral") || text.includes("decor")) return "flowers";
-  if (text.includes("lamp") || text.includes("light") || text.includes("chandelier")) return "lamp";
-
-  return "chair";
-}
-
-function positiveNumber(value: unknown, fallback: number): number {
-  const numberValue = Number(value);
-  return Number.isFinite(numberValue) && numberValue > 0
-    ? numberValue
-    : fallback;
-}
-
-function createMatchedFurnitureItems(
-  inventory: unknown
-): FurnitureItem[] {
-  if (!Array.isArray(inventory)) return [];
-
-  const items: FurnitureItem[] = [];
-  const columns = 4;
-  const spacing = 2.25;
-
-  inventory.forEach((rawItem, index) => {
-    if (!rawItem || typeof rawItem !== "object") return;
-
-    const item = rawItem as Partial<InventoryItem>;
-    const inventoryId = Number(item.id);
-    if (!Number.isFinite(inventoryId) || inventoryId <= 0) return;
-
-    const type = getMatchedElementType(item.category, item.name);
-    const fallback = DIMENSIONS[type];
-    const column = index % columns;
-    const row = Math.floor(index / columns);
-
-    items.push({
-      // A unique editor ID is required even when inventory IDs are repeated.
-      id: Date.now() + index + 1,
-      inventoryId,
-      type,
-      name: typeof item.name === "string" ? item.name : "Matched Item",
-      modelUrl: typeof item.modelUrl === "string" ? item.modelUrl : "",
-      imageUrl: typeof item.imageUrl === "string" ? item.imageUrl : null,
-      width: positiveNumber(item.width, fallback.width),
-      depth: positiveNumber(item.depth, fallback.depth),
-      height: positiveNumber(item.height, fallback.height),
-      position: [
-        (column - (columns - 1) / 2) * spacing,
-        0,
-        (row - 0.5) * spacing,
-      ],
-      rotation: 0,
-    });
-  });
-
-  return items;
-}
-
-function extractVenuePayload(payload: unknown, venueId: number): Venue | null {
-  if (Array.isArray(payload)) {
-    return payload.find((item) => Number(item?.id) === venueId) ?? null;
-  }
-
-  if (!payload || typeof payload !== "object") return null;
-
-  const record = payload as Record<string, unknown>;
-  const candidates = [record.venue, record.data, record.item, payload];
-
-  for (const candidate of candidates) {
-    if (candidate && typeof candidate === "object" && Number((candidate as Venue).id) === venueId) {
-      return candidate as Venue;
-    }
-  }
-
-  return null;
-}
-
-type Theme = {
-  id: number;
-  name: string;
-  description: string | null;
-  primaryColor: string | null;
-  secondaryColor: string | null;
-  decorationStyle: string | null;
-  sceneSettings: string | null;
-};
-
-/* =========================================================
-   REAL-LIFE DEFAULT DIMENSIONS
-========================================================= */
-
-/*
-   These remain as fallbacks for older saved scenes
-   or objects that do not have inventory dimensions.
-
-   New inventory objects use their own
-   width/depth/height values.
-*/
 
 const DIMENSIONS: Record<
   ElementType,
@@ -251,23 +96,10 @@ const DIMENSIONS: Record<
 };
 
 /* =========================================================
-   DEFAULT MODEL PATHS
+   MODEL PATHS
 ========================================================= */
 
-/*
-   These are kept ONLY as fallbacks.
-
-   New inventory objects will use:
-
-      inventoryItem.modelUrl
-
-   instead.
-*/
-
-const MODEL_PATHS: Record<
-  ElementType,
-  string
-> = {
+const MODEL_PATHS: Record<ElementType, string> = {
   chair: "/models/SheenChair.glb",
   table: "/models/RoundTable.glb",
   sofa: "/models/Sofa.glb",
@@ -276,10 +108,7 @@ const MODEL_PATHS: Record<
   lamp: "/models/Lamp.glb",
 };
 
-const LABELS: Record<
-  ElementType,
-  string
-> = {
+const LABELS: Record<ElementType, string> = {
   chair: "Chair",
   table: "Table",
   sofa: "Sofa",
@@ -288,10 +117,7 @@ const LABELS: Record<
   lamp: "Lamp",
 };
 
-const ICONS: Record<
-  ElementType,
-  string
-> = {
+const ICONS: Record<ElementType, string> = {
   chair: "🪑",
   table: "🟤",
   sofa: "🛋️",
@@ -301,137 +127,31 @@ const ICONS: Record<
 };
 
 /* =========================================================
-   INVENTORY CATEGORY → ELEMENT TYPE
-========================================================= */
-
-function getElementType(
-  category: string
-): ElementType {
-  const value =
-    category.toLowerCase();
-
-  if (
-    value.includes("table")
-  ) {
-    return "table";
-  }
-
-  if (
-    value.includes("sofa") ||
-    value.includes("couch")
-  ) {
-    return "sofa";
-  }
-
-  if (
-    value.includes("stage")
-  ) {
-    return "stage";
-  }
-
-  if (
-    value.includes("flower") ||
-    value.includes("decoration")
-  ) {
-    return "flowers";
-  }
-
-  if (
-    value.includes("lamp") ||
-    value.includes("light")
-  ) {
-    return "lamp";
-  }
-
-  if (
-    value.includes("chair") ||
-    value.includes("seat")
-  ) {
-    return "chair";
-  }
-
-  return "chair";
-}
-
-/* =========================================================
-   GET ITEM DIMENSIONS
-========================================================= */
-
-function getItemDimensions(
-  item: FurnitureItem
-) {
-  const fallback =
-    DIMENSIONS[item.type];
-
-  return {
-    width:
-      typeof item.width ===
-      "number"
-        ? item.width
-        : fallback.width,
-
-    depth:
-      typeof item.depth ===
-      "number"
-        ? item.depth
-        : fallback.depth,
-
-    height:
-      typeof item.height ===
-      "number"
-        ? item.height
-        : fallback.height,
-  };
-}
-
-/* =========================================================
    SCALE 3D MODEL TO REAL DIMENSIONS
 ========================================================= */
 
 function createModel(
   scene: THREE.Object3D,
-  dimensions: {
-    width: number;
-    depth: number;
-    height: number;
-  }
+  type: ElementType
 ) {
-  const model =
-    scene.clone(true);
+  const model = scene.clone(true);
 
-  const box =
-    new THREE.Box3().setFromObject(
-      model
-    );
+  const box = new THREE.Box3().setFromObject(model);
 
-  const size =
-    new THREE.Vector3();
+  const size = new THREE.Vector3();
 
   box.getSize(size);
 
-  /*
-     Scale X → real width
-     Scale Y → real height
-     Scale Z → real depth
-  */
+  const target = DIMENSIONS[type];
 
   const scaleX =
-    size.x > 0
-      ? dimensions.width /
-        size.x
-      : 1;
+    size.x > 0 ? target.width / size.x : 1;
 
   const scaleY =
-    size.y > 0
-      ? dimensions.height /
-        size.y
-      : 1;
+    size.y > 0 ? target.height / size.y : 1;
 
   const scaleZ =
-    size.z > 0
-      ? dimensions.depth /
-        size.z
-      : 1;
+    size.z > 0 ? target.depth / size.z : 1;
 
   model.scale.set(
     scaleX,
@@ -439,20 +159,70 @@ function createModel(
     scaleZ
   );
 
-  /*
-     Put the bottom of the model
-     exactly on the venue floor.
-  */
-
   const finalBox =
-    new THREE.Box3().setFromObject(
-      model
-    );
+    new THREE.Box3().setFromObject(model);
 
-  model.position.y =
-    -finalBox.min.y;
+  model.position.y = -finalBox.min.y;
 
   return model;
+}
+
+/* =========================================================
+   UPLOADED VENUE MODEL
+========================================================= */
+
+function VenueModel({
+  url,
+}: {
+  url: string;
+}) {
+  const { scene } = useGLTF(url);
+
+  const model = useMemo(() => {
+    const cloned = scene.clone(true);
+
+    const box = new THREE.Box3().setFromObject(cloned);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+
+    box.getSize(size);
+    box.getCenter(center);
+
+    const largestDimension = Math.max(
+      size.x,
+      size.y,
+      size.z,
+      0.001
+    );
+
+    /*
+     * Imported GLB files can use completely different units.
+     * Scale the model so that it fits inside the editable
+     * 12m × 12m workspace while preserving its proportions.
+     */
+    const targetSize = 11;
+    const scale = targetSize / largestDimension;
+
+    cloned.scale.setScalar(scale);
+
+    const scaledBox = new THREE.Box3().setFromObject(cloned);
+    const scaledCenter = new THREE.Vector3();
+
+    scaledBox.getCenter(scaledCenter);
+
+    cloned.position.x = -scaledCenter.x;
+    cloned.position.z = -scaledCenter.z;
+    cloned.position.y = -scaledBox.min.y;
+
+    return cloned;
+  }, [scene]);
+
+  return (
+    <primitive
+      object={model}
+      dispose={null}
+    />
+  );
 }
 
 /* =========================================================
@@ -478,59 +248,21 @@ function Furniture3D({
     position: [number, number, number]
   ) => void;
 }) {
-  /*
-     IMPORTANT:
+  const { scene } = useGLTF(
+    MODEL_PATHS[item.type]
+  );
 
-     Inventory modelUrl is preferred.
+  const { camera, raycaster } = useThree();
 
-     MODEL_PATHS remains as a fallback
-     for older objects saved before
-     Phase 2 Step 3.
-  */
-
-  const modelUrl =
-    item.modelUrl ||
-    MODEL_PATHS[item.type];
-
-  const { scene } =
-    useGLTF(modelUrl);
-
-  const {
-    camera,
-    raycaster,
-  } = useThree();
-
-  const dimensions =
-    getItemDimensions(item);
-
-  const model =
-    useMemo(
-      () =>
-        createModel(
-          scene,
-          dimensions
-        ),
-      [
-        scene,
-        dimensions.width,
-        dimensions.depth,
-        dimensions.height,
-      ]
-    );
-
-  /* =======================================================
-     SELECT OBJECT
-  ======================================================= */
+  const model = useMemo(
+    () => createModel(scene, item.type),
+    [scene, item.type]
+  );
 
   const handlePointerDown = (
     e: ThreeEvent<PointerEvent>
   ) => {
     e.stopPropagation();
-
-    /*
-       Measurement mode takes
-       priority over normal selection.
-    */
 
     if (measureMode) {
       onMeasureSelect();
@@ -540,42 +272,21 @@ function Furniture3D({
     onSelect();
   };
 
-  /* =======================================================
-     MOVE OBJECT
-  ======================================================= */
-
   const handlePointerMove = (
     e: ThreeEvent<PointerEvent>
   ) => {
-    /*
-       Do not move while measuring.
-    */
-
-    if (
-      measureMode ||
-      !selected
-    ) {
+    if (measureMode || !selected) {
       return;
     }
 
     e.stopPropagation();
 
-    /*
-       Horizontal floor plane.
-    */
+    const plane = new THREE.Plane(
+      new THREE.Vector3(0, 1, 0),
+      0
+    );
 
-    const plane =
-      new THREE.Plane(
-        new THREE.Vector3(
-          0,
-          1,
-          0
-        ),
-        0
-      );
-
-    const point =
-      new THREE.Vector3();
+    const point = new THREE.Vector3();
 
     raycaster.setFromCamera(
       e.pointer,
@@ -588,23 +299,13 @@ function Furniture3D({
     );
 
     if (point) {
-      /*
-         Keep the object inside
-         the 12m × 12m venue.
-
-         The centre is kept between
-         -5.5m and +5.5m.
-      */
-
       onMove([
         THREE.MathUtils.clamp(
           point.x,
           -5.5,
           5.5
         ),
-
         0,
-
         THREE.MathUtils.clamp(
           point.z,
           -5.5,
@@ -632,10 +333,6 @@ function Furniture3D({
           handlePointerMove
         }
       />
-
-      {/* =================================================
-          NORMAL SELECTION
-      ================================================= */}
 
       {selected && (
         <mesh
@@ -665,10 +362,6 @@ function Furniture3D({
           />
         </mesh>
       )}
-
-      {/* =================================================
-          MEASUREMENT SELECTION
-      ================================================= */}
 
       {measureSelected && (
         <mesh
@@ -725,24 +418,9 @@ function Furniture2D({
     position: [number, number, number]
   ) => void;
 }) {
-  const {
-    camera,
-    raycaster,
-  } = useThree();
+  const { camera, raycaster } = useThree();
 
-  /*
-     IMPORTANT:
-
-     2D view now also uses the
-     actual inventory dimensions.
-  */
-
-  const dimensions =
-    getItemDimensions(item);
-
-  /* =======================================================
-     SELECT
-  ======================================================= */
+  const dimensions = DIMENSIONS[item.type];
 
   const handlePointerDown = (
     e: ThreeEvent<PointerEvent>
@@ -756,34 +434,21 @@ function Furniture2D({
     }
   };
 
-  /* =======================================================
-     MOVE
-  ======================================================= */
-
   const handlePointerMove = (
     e: ThreeEvent<PointerEvent>
   ) => {
-    if (
-      measureMode ||
-      !selected
-    ) {
+    if (measureMode || !selected) {
       return;
     }
 
     e.stopPropagation();
 
-    const plane =
-      new THREE.Plane(
-        new THREE.Vector3(
-          0,
-          1,
-          0
-        ),
-        0
-      );
+    const plane = new THREE.Plane(
+      new THREE.Vector3(0, 1, 0),
+      0
+    );
 
-    const point =
-      new THREE.Vector3();
+    const point = new THREE.Vector3();
 
     raycaster.setFromCamera(
       e.pointer,
@@ -802,9 +467,7 @@ function Furniture2D({
           -5.5,
           5.5
         ),
-
         0,
-
         THREE.MathUtils.clamp(
           point.z,
           -5.5,
@@ -814,54 +477,34 @@ function Furniture2D({
     }
   };
 
-  /* =======================================================
-     OBJECT SHAPE
-  ======================================================= */
-
   const isCircle =
     item.type === "table" ||
     item.type === "flowers" ||
     item.type === "lamp";
 
-  /* =======================================================
-     OBJECT COLOUR
-  ======================================================= */
-
   let fill = "#e5e7eb";
 
-  if (
-    item.type === "chair"
-  ) {
+  if (item.type === "chair") {
     fill = "#fde68a";
   }
 
-  if (
-    item.type === "table"
-  ) {
+  if (item.type === "table") {
     fill = "#ddd6fe";
   }
 
-  if (
-    item.type === "sofa"
-  ) {
+  if (item.type === "sofa") {
     fill = "#bbf7d0";
   }
 
-  if (
-    item.type === "stage"
-  ) {
+  if (item.type === "stage") {
     fill = "#fecaca";
   }
 
-  if (
-    item.type === "flowers"
-  ) {
+  if (item.type === "flowers") {
     fill = "#fbcfe8";
   }
 
-  if (
-    item.type === "lamp"
-  ) {
+  if (item.type === "lamp") {
     fill = "#fed7aa";
   }
 
@@ -878,10 +521,7 @@ function Furniture2D({
         0,
       ]}
     >
-      {/* =================================================
-          OBJECT FOOTPRINT
-      ================================================= */}
-
+      {/* OBJECT FOOTPRINT */}
       <mesh
         onPointerDown={
           handlePointerDown
@@ -893,10 +533,8 @@ function Furniture2D({
         {isCircle ? (
           <cylinderGeometry
             args={[
-              dimensions.width /
-                2,
-              dimensions.width /
-                2,
+              dimensions.width / 2,
+              dimensions.width / 2,
               0.08,
               40,
             ]}
@@ -918,10 +556,7 @@ function Furniture2D({
         />
       </mesh>
 
-      {/* =================================================
-          NORMAL SELECTION
-      ================================================= */}
-
+      {/* SELECTION */}
       {selected && (
         <mesh
           rotation={[
@@ -938,25 +573,16 @@ function Furniture2D({
           {isCircle ? (
             <ringGeometry
               args={[
-                dimensions.width /
-                    2 +
-                  0.08,
-
-                dimensions.width /
-                    2 +
-                  0.12,
-
+                dimensions.width / 2 + 0.08,
+                dimensions.width / 2 + 0.12,
                 40,
               ]}
             />
           ) : (
             <planeGeometry
               args={[
-                dimensions.width +
-                  0.16,
-
-                dimensions.depth +
-                  0.16,
+                dimensions.width + 0.16,
+                dimensions.depth + 0.16,
               ]}
             />
           )}
@@ -965,17 +591,12 @@ function Furniture2D({
             color="#2563eb"
             transparent
             opacity={0.35}
-            side={
-              THREE.DoubleSide
-            }
+            side={THREE.DoubleSide}
           />
         </mesh>
       )}
 
-      {/* =================================================
-          MEASUREMENT SELECTION
-      ================================================= */}
-
+      {/* MEASUREMENT SELECTION */}
       {measureSelected && (
         <mesh
           rotation={[
@@ -992,25 +613,16 @@ function Furniture2D({
           {isCircle ? (
             <ringGeometry
               args={[
-                dimensions.width /
-                    2 +
-                  0.13,
-
-                dimensions.width /
-                    2 +
-                  0.17,
-
+                dimensions.width / 2 + 0.13,
+                dimensions.width / 2 + 0.17,
                 40,
               ]}
             />
           ) : (
             <planeGeometry
               args={[
-                dimensions.width +
-                  0.22,
-
-                dimensions.depth +
-                  0.22,
+                dimensions.width + 0.22,
+                dimensions.depth + 0.22,
               ]}
             />
           )}
@@ -1019,9 +631,7 @@ function Furniture2D({
             color="#ef4444"
             transparent
             opacity={0.4}
-            side={
-              THREE.DoubleSide
-            }
+            side={THREE.DoubleSide}
           />
         </mesh>
       )}
@@ -1035,19 +645,12 @@ function Furniture2D({
 
 function Floor({
   onClear,
-  primaryColor = "#2563eb",
-  secondaryColor = "#f8fafc",
 }: {
   onClear: () => void;
-  primaryColor?: string;
-  secondaryColor?: string;
 }) {
   return (
     <>
-      {/* =================================================
-          WHITE VENUE PLATFORM
-      ================================================= */}
-
+      {/* WHITE VENUE PLATFORM */}
       <mesh
         rotation={[
           -Math.PI / 2,
@@ -1066,17 +669,12 @@ function Floor({
         />
 
         <meshStandardMaterial
-          color={secondaryColor}
-          side={
-            THREE.DoubleSide
-          }
+          color="#ffffff"
+          side={THREE.DoubleSide}
         />
       </mesh>
 
-      {/* =================================================
-          GRID
-      ================================================= */}
-
+      {/* GRID */}
       <Grid
         args={[
           12,
@@ -1084,10 +682,10 @@ function Floor({
         ]}
         cellSize={0.5}
         cellThickness={0.7}
-        cellColor={secondaryColor}
+        cellColor="#d1d5db"
         sectionSize={1}
         sectionThickness={1.2}
-        sectionColor={primaryColor}
+        sectionColor="#9ca3af"
         fadeDistance={20}
         fadeStrength={0}
         infiniteGrid={false}
@@ -1098,10 +696,7 @@ function Floor({
         ]}
       />
 
-      {/* =================================================
-          PLATFORM BORDER
-      ================================================= */}
-
+      {/* PLATFORM BORDER */}
       <Line
         points={[
           [-6, 0.04, -6],
@@ -1110,14 +705,11 @@ function Floor({
           [-6, 0.04, 6],
           [-6, 0.04, -6],
         ]}
-        color={primaryColor}
+        color="#374151"
         lineWidth={3}
       />
 
-      {/* =================================================
-          TOP/BOTTOM DIMENSION
-      ================================================= */}
-
+      {/* TOP/BOTTOM DIMENSION */}
       <Line
         points={[
           [-6, 0.05, 6.35],
@@ -1127,10 +719,7 @@ function Floor({
         lineWidth={1}
       />
 
-      {/* =================================================
-          LEFT/RIGHT DIMENSION
-      ================================================= */}
-
+      {/* LEFT/RIGHT DIMENSION */}
       <Line
         points={[
           [-6.35, 0.05, -6],
@@ -1154,19 +743,18 @@ function Measurement({
   start: FurnitureItem;
   end: FurnitureItem;
 }) {
-  const distance =
-    Math.sqrt(
+  const distance = Math.sqrt(
+    Math.pow(
+      end.position[0] -
+        start.position[0],
+      2
+    ) +
       Math.pow(
-        end.position[0] -
-          start.position[0],
+        end.position[2] -
+          start.position[2],
         2
-      ) +
-        Math.pow(
-          end.position[2] -
-            start.position[2],
-          2
-        )
-    );
+      )
+  );
 
   const middle: [
     number,
@@ -1176,9 +764,7 @@ function Measurement({
     (start.position[0] +
       end.position[0]) /
       2,
-
     0.4,
-
     (start.position[2] +
       end.position[2]) /
       2,
@@ -1193,7 +779,6 @@ function Measurement({
             0.2,
             start.position[2],
           ],
-
           [
             end.position[0],
             0.2,
@@ -1230,31 +815,20 @@ function HtmlDistanceLabel({
   return (
     <div
       style={{
-        position:
-          "absolute",
-
+        position: "absolute",
         left: "50%",
-
         top: "50%",
-
         transform:
           "translate(-50%, -50%)",
-
-        pointerEvents:
-          "none",
+        pointerEvents: "none",
       }}
     >
       <div
         className="distance-label"
         style={{
-          position:
-            "absolute",
-
-          left:
-            position[0] * 20,
-
-          top:
-            position[2] * 20,
+          position: "absolute",
+          left: position[0] * 20,
+          top: position[2] * 20,
         }}
       >
         {distance.toFixed(2)} m
@@ -1273,74 +847,119 @@ function TopBar({
   saveScene,
   viewMode,
   setViewMode,
-  selectedTheme,
-  onSwitchTheme,
 }: {
   venue: Venue | null;
   saving: boolean;
   saveScene: () => void;
   viewMode: "2D" | "3D";
-  setViewMode: (mode: "2D" | "3D") => void;
-  selectedTheme: Theme | null;
-  onSwitchTheme: () => void;
+  setViewMode: (
+    mode: "2D" | "3D"
+  ) => void;
 }) {
-  const primaryColor = selectedTheme?.primaryColor || "#2563eb";
-
   return (
     <header className="topbar">
-      <a href="/" className="brand" aria-label="Wedding Planner home">
-        <div className="brand-icon" style={{ background: primaryColor }}>W</div>
-        <div>
-          <div className="brand-title">Wedding Planner</div>
-          <div className="brand-subtitle">3D Venue Designer</div>
+      <div className="brand">
+        <div className="brand-icon">
+          W
         </div>
-      </a>
 
-      <nav className="main-navigation" aria-label="Main navigation">
-        <a href="/" className="top-nav-link">Designer</a>
-        <a href="/venues" className="top-nav-link">Venues</a>
-        <a href="/inventory" className="top-nav-link">Inventory</a>
-        <a href="/themes" className="top-nav-link">Themes</a>
-        <a href="/match" className="top-nav-link">Find Matches</a>
-        <a href="/designs" className="top-nav-link">Saved Designs</a>
+        <div>
+          <div className="brand-title">
+            Wedding Planner
+          </div>
+
+          <div className="brand-subtitle">
+            3D Venue Designer
+          </div>
+        </div>
+      </div>
+
+      <nav className="top-navigation" aria-label="Main navigation">
+        <a href="/" className="top-nav-link top-nav-active">
+          Designer
+        </a>
+
+        <a href="/venues" className="top-nav-link">
+          Venues
+        </a>
+
+        <a href="/inventory" className="top-nav-link">
+          Inventory
+        </a>
+
+        <a href="/themes" className="top-nav-link">
+          Themes
+        </a>
+
+        <a href="/match" className="top-nav-link">
+          Find Matches
+        </a>
+
+        <a href="/designs" className="top-nav-link">
+          Saved Designs
+        </a>
       </nav>
 
       <div className="project-title">
-        <div className="project-small">PROJECT</div>
-        <div className="project-name">{venue?.name || "Wedding Venue"}</div>
+        <div className="project-small">
+          PROJECT
+        </div>
+
+        <div className="project-name">
+          {venue?.name ||
+            "Wedding Venue"}
+        </div>
       </div>
 
       <div className="top-actions">
-        <button
-          type="button"
-          onClick={onSwitchTheme}
-          style={{
-            border: "none",
-            borderRadius: "10px",
-            padding: "9px 12px",
-            background: selectedTheme ? primaryColor : "#eef2ff",
-            color: selectedTheme ? "#ffffff" : "#334155",
-            fontWeight: 700,
-            cursor: "pointer",
-            whiteSpace: "nowrap",
-          }}
-          title="Choose or change the wedding theme"
-        >
-          ✨ {selectedTheme?.name || "Choose Theme"}
-        </button>
-
         <span className="saved-status">
-          <span className="status-dot">●</span>{" "}
-          {saving ? "Saving..." : "Ready"}
+          ●{" "}
+          {saving
+            ? "Saving..."
+            : "Saved"}
         </span>
 
-        <button type="button" className="save-button" onClick={saveScene} disabled={saving}>
-          {saving ? "Saving..." : "💾 Save Design"}
+        <button
+          className="save-button"
+          onClick={
+            saveScene
+          }
+        >
+          💾 Save
         </button>
 
         <div className="view-toggle">
-          <button type="button" className={viewMode === "2D" ? "view-active" : ""} onClick={() => setViewMode("2D")}>2D</button>
-          <button type="button" className={viewMode === "3D" ? "view-active" : ""} onClick={() => setViewMode("3D")}>3D</button>
+          <button
+            className={
+              viewMode ===
+              "2D"
+                ? "view-active"
+                : ""
+            }
+            onClick={() =>
+              setViewMode(
+                "2D"
+              )
+            }
+          >
+            2D
+          </button>
+
+          <button
+            className={
+              viewMode ===
+              "3D"
+                ? "view-active"
+                : ""
+            }
+            onClick={() =>
+              setViewMode(
+                "3D"
+              )
+            }
+          >
+            3D
+          </button>
         </div>
       </div>
     </header>
@@ -1419,20 +1038,12 @@ function BuildPanel({
   addItem,
   measureMode,
   startMeasurement,
-  inventory,
-  inventoryLoading,
 }: {
   addItem: (
-    item: InventoryItem
+    type: ElementType
   ) => void;
-
   measureMode: boolean;
-
   startMeasurement: () => void;
-
-  inventory: InventoryItem[];
-
-  inventoryLoading: boolean;
 }) {
   return (
     <section className="build-panel">
@@ -1441,300 +1052,49 @@ function BuildPanel({
       </div>
 
       <div className="panel-content">
-
-        {/* =================================================
-            INVENTORY
-        ================================================= */}
-
         <div className="section-title">
-          Inventory
+          Add Elements
         </div>
 
-        {inventoryLoading ? (
-          <div
-            style={{
-              padding:
-                "20px 5px",
+        <div className="element-list">
+          {(
+            Object.keys(
+              LABELS
+            ) as ElementType[]
+          ).map(
+            (type) => (
+              <button
+                className="element-button"
+                key={type}
+                onClick={() =>
+                  addItem(
+                    type
+                  )
+                }
+              >
+                <span className="element-icon">
+                  {
+                    ICONS[
+                      type
+                    ]
+                  }
+                </span>
 
-              textAlign:
-                "center",
+                <span>
+                  {
+                    LABELS[
+                      type
+                    ]
+                  }
+                </span>
 
-              color:
-                "#8b95a1",
-
-              fontSize:
-                "12px",
-            }}
-          >
-            Loading inventory...
-          </div>
-        ) : inventory.length ===
-          0 ? (
-          <div
-            style={{
-              padding:
-                "20px 5px",
-
-              textAlign:
-                "center",
-
-              color:
-                "#8b95a1",
-
-              fontSize:
-                "12px",
-            }}
-          >
-            No inventory items
-            found.
-          </div>
-        ) : (
-          <div
-            style={{
-              display:
-                "flex",
-
-              flexDirection:
-                "column",
-
-              gap: "10px",
-            }}
-          >
-            {inventory.map(
-              (item) => {
-                const
-                  unavailable =
-                    item.availableQuantity <=
-                    0;
-
-                return (
-                  <button
-                    key={
-                      item.id
-                    }
-                    className="element-button"
-                    onClick={() =>
-                      addItem(
-                        item
-                      )
-                    }
-                    disabled={
-                      unavailable
-                    }
-                    style={{
-                      padding:
-                        "8px",
-
-                      cursor:
-                        unavailable
-                          ? "not-allowed"
-                          : "pointer",
-
-                      opacity:
-                        unavailable
-                          ? 0.5
-                          : 1,
-                    }}
-                  >
-                    {/* =====================================
-                        IMAGE
-                    ===================================== */}
-
-                    <span
-                      style={{
-                        width:
-                          "48px",
-
-                        height:
-                          "48px",
-
-                        borderRadius:
-                          "6px",
-
-                        overflow:
-                          "hidden",
-
-                        background:
-                          "#f1f3f5",
-
-                        display:
-                          "flex",
-
-                        alignItems:
-                          "center",
-
-                        justifyContent:
-                          "center",
-
-                        flexShrink:
-                          0,
-                      }}
-                    >
-                      {item.imageUrl ? (
-                        <img
-                          src={
-                            item.imageUrl
-                          }
-                          alt={
-                            item.name
-                          }
-                          style={{
-                            width:
-                              "100%",
-
-                            height:
-                              "100%",
-
-                            objectFit:
-                              "cover",
-                          }}
-                        />
-                      ) : (
-                        <span
-                          style={{
-                            fontSize:
-                              "20px",
-                          }}
-                        >
-                          {ICONS[
-                            getElementType(
-                              item.category
-                            )
-                          ]}
-                        </span>
-                      )}
-                    </span>
-
-                    {/* =====================================
-                        INFORMATION
-                    ===================================== */}
-
-                    <span
-                      style={{
-                        display:
-                          "flex",
-
-                        flexDirection:
-                          "column",
-
-                        alignItems:
-                          "flex-start",
-
-                        minWidth:
-                          0,
-
-                        flex: 1,
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize:
-                            "12px",
-
-                          fontWeight:
-                            800,
-
-                          color:
-                            "#374151",
-
-                          overflow:
-                            "hidden",
-
-                          textOverflow:
-                            "ellipsis",
-
-                          whiteSpace:
-                            "nowrap",
-
-                          width:
-                            "100%",
-                        }}
-                      >
-                        {
-                          item.name
-                        }
-                      </span>
-
-                      <span
-                        style={{
-                          fontSize:
-                            "10px",
-
-                          color:
-                            "#8b95a1",
-
-                          marginTop:
-                            "3px",
-                        }}
-                      >
-                        {
-                          item.category
-                        }
-                      </span>
-
-                      <span
-                        style={{
-                          fontSize:
-                            "9px",
-
-                          color:
-                            "#9ca3af",
-
-                          marginTop:
-                            "3px",
-                        }}
-                      >
-                        {
-                          item.width
-                        }
-                        m ×{" "}
-                        {
-                          item.depth
-                        }
-                        m ×{" "}
-                        {
-                          item.height
-                        }
-                        m
-                      </span>
-
-                      <span
-                        style={{
-                          fontSize:
-                            "9px",
-
-                          color:
-                            unavailable
-                              ? "#dc2626"
-                              : "#16a34a",
-
-                          marginTop:
-                            "2px",
-                        }}
-                      >
-                        {unavailable
-                          ? "Out of stock"
-                          : `${item.availableQuantity} available`}
-                      </span>
-                    </span>
-
-                    {/* =====================================
-                        ADD ICON
-                    ===================================== */}
-
-                    <span className="add-plus">
-                      +
-                    </span>
-                  </button>
-                );
-              }
-            )}
-          </div>
-        )}
-
-        {/* =================================================
-            TOOLS
-        ================================================= */}
+                <span className="add-plus">
+                  +
+                </span>
+              </button>
+            )
+          )}
+        </div>
 
         <div className="section-title second">
           Tools
@@ -1761,40 +1121,33 @@ function BuildPanel({
           </span>
         </button>
 
-        {/* =================================================
-            TIP
-        ================================================= */}
-
         <div className="tip-box">
           <strong>
             Quick controls
           </strong>
 
           <p>
-            Drag objects to move
-            them.
+            Drag objects
+            to move them.
           </p>
 
           <p>
-            Press <b>R</b> to
-            rotate.
+            Press{" "}
+            <b>R</b>{" "}
+            to rotate.
           </p>
 
           <p>
-            Use 2D view for
-            precise floor
-            planning.
+            Use 2D view
+            for precise
+            floor planning.
           </p>
 
           <p>
-            Inventory items use
-            their real dimensions.
-          </p>
-
-          <p>
-            Click an inventory
-            item to add it to
-            your design.
+            All furniture
+            uses practical
+            real-world
+            dimensions.
           </p>
         </div>
       </div>
@@ -1802,9 +1155,6 @@ function BuildPanel({
   );
 }
 
-/* =========================================================
-   END OF FIRST SECTION
-========================================================= */
 /* =========================================================
    PROPERTIES PANEL
 ========================================================= */
@@ -1845,18 +1195,10 @@ function PropertiesPanel({
     );
   }
 
-  /*
-     Use the dimensions stored
-     with the inventory item.
-
-     Fall back to the old dimensions
-     for older saved objects.
-  */
-
   const dimensions =
-    getItemDimensions(
-      selected
-    );
+    DIMENSIONS[
+      selected.type
+    ];
 
   return (
     <aside className="properties-panel">
@@ -1875,16 +1217,15 @@ function PropertiesPanel({
 
         <div>
           <div className="selected-name">
-            {selected.name ||
+            {
               LABELS[
                 selected.type
-              ]}
+              ]
+            }
           </div>
 
           <div className="selected-type">
-            {selected.inventoryId
-              ? "Inventory item"
-              : "Furniture element"}
+            Furniture element
           </div>
         </div>
       </div>
@@ -1968,10 +1309,6 @@ function PropertiesPanel({
   );
 }
 
-/* =========================================================
-   PROPERTY ROW
-========================================================= */
-
 function PropertyRow({
   label,
   value,
@@ -2018,7 +1355,6 @@ function BottomToolbar({
         }
       >
         📏
-
         <span>
           Measure
         </span>
@@ -2033,7 +1369,6 @@ function BottomToolbar({
         }
       >
         ↶
-
         <span>
           Reset
         </span>
@@ -2046,7 +1381,6 @@ function BottomToolbar({
         }
       >
         ✕
-
         <span>
           Clear
         </span>
@@ -2070,10 +1404,6 @@ function BottomToolbar({
 ========================================================= */
 
 export default function Home() {
-  /* =======================================================
-     VENUE
-  ======================================================= */
-
   const [venue, setVenue] =
     useState<Venue | null>(
       null
@@ -2085,150 +1415,30 @@ export default function Home() {
   const [error, setError] =
     useState("");
 
-  /* =======================================================
-     INVENTORY
-  ======================================================= */
-
-  const [
-    inventory,
-    setInventory,
-  ] = useState<
-    InventoryItem[]
-  >([]);
-
-  const [
-    inventoryLoading,
-    setInventoryLoading,
-  ] = useState(true);
-
-  /* =======================================================
-     THEMES
-  ======================================================= */
-
-  const [themes, setThemes] = useState<Theme[]>([]);
-  const [themesLoading, setThemesLoading] = useState(true);
-  const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
-  const [themeModalOpen, setThemeModalOpen] = useState(false);
-  const [currentDesignId, setCurrentDesignId] = useState<number | null>(null);
-  const [currentDesignName, setCurrentDesignName] = useState("");
-  const [selectedThemeId, setSelectedThemeId] = useState<number | null>(null);
-  /* =======================================================
-     LOAD THEMES
-  ======================================================= */
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadThemes() {
-      try {
-        setThemesLoading(true);
-        const response = await fetch("/api/themes", { cache: "no-store" });
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data?.error || "Failed to load themes");
-        }
-
-        if (!cancelled) {
-          setThemes(Array.isArray(data) ? data : []);
-        }
-      } catch (err) {
-        console.error("Failed to load themes:", err);
-        if (!cancelled) setThemes([]);
-      } finally {
-        if (!cancelled) setThemesLoading(false);
-      }
-    }
-
-    loadThemes();
-    return () => { cancelled = true; };
-  }, []);
-
-  /* =======================================================
-   LOAD INVENTORY
-======================================================= */
-
-useEffect(() => {
-  let cancelled = false;
-
-  async function loadInventory() {
-    try {
-      setInventoryLoading(true);
-
-      const response = await fetch(
-        "/api/inventory",
-        {
-          cache: "no-store",
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.details ||
-            data.error ||
-            "Failed to load inventory"
-        );
-      }
-
-      if (!cancelled) {
-        setInventory(
-          Array.isArray(data)
-            ? data
-            : []
-        );
-      }
-    } catch (error) {
-      console.error(
-        "Failed to load inventory:",
-        error
-      );
-
-      if (!cancelled) {
-        setInventory([]);
-      }
-    } finally {
-      if (!cancelled) {
-        setInventoryLoading(false);
-      }
-    }
-  }
-
-  loadInventory();
-
-  return () => {
-    cancelled = true;
-  };
-}, []);
-
-  /* =======================================================
-     PLACED ITEMS
-  ======================================================= */
-
   const [items, setItems] =
-    useState<FurnitureItem[]>(
-      []
-    );
+    useState<FurnitureItem[]>([
+      {
+        id: 1,
+        type: "chair",
+        position: [
+          0,
+          0,
+          0,
+        ],
+        rotation: 0,
+      },
+    ]);
 
   const [
     selectedId,
     setSelectedId,
   ] =
     useState<number | null>(
-      null
+      1
     );
-
-  /* =======================================================
-     SAVE
-  ======================================================= */
 
   const [saving, setSaving] =
     useState(false);
-
-  /* =======================================================
-     MEASUREMENT
-  ======================================================= */
 
   const [
     measureMode,
@@ -2252,19 +1462,11 @@ useEffect(() => {
       null
     );
 
-  /* =======================================================
-     NAVIGATION
-  ======================================================= */
-
   const [
     activeNav,
     setActiveNav,
   ] =
     useState("Build");
-
-  /* =======================================================
-     VIEW
-  ======================================================= */
 
   const [
     viewMode,
@@ -2275,424 +1477,112 @@ useEffect(() => {
     );
 
   /* =======================================================
-     LOAD EDITOR
+     LOAD VENUE
   ======================================================= */
 
   useEffect(() => {
-    let cancelled = false;
-
-    function toNumber(value: unknown): number | null {
-      const n = Number(value);
-      return Number.isFinite(n) ? n : null;
-    }
-
-    function normalizeDesignPayload(payload: unknown): any[] {
-      if (Array.isArray(payload)) {
-        return payload;
-      }
-
-      if (!payload || typeof payload !== "object") {
-        return [];
-      }
-
-      const record = payload as Record<string, unknown>;
-
-      const candidates = [
-        record.designs,
-        record.savedDesigns,
-        record.data,
-        record.items,
-        record.results,
-      ];
-
-      for (const candidate of candidates) {
-        if (Array.isArray(candidate)) {
-          return candidate;
-        }
-      }
-
-      return [];
-    }
-
-    async function readJson(response: Response) {
-      const text = await response.text();
-
-      if (!text) {
-        return null;
-      }
-
-      try {
-        return JSON.parse(text);
-      } catch {
-        return null;
-      }
-    }
-
-    async function loadEditor() {
-      try {
-        setLoading(true);
-        setError("");
-
-        const params = new URLSearchParams(
-          window.location.search
-        );
-
-        const venueIdParam = params.get("venueId");
-        const designIdParam = params.get("designId");
-
-        let loadedVenue: Venue | null = null;
-
-        /* =====================================================
-           LOAD SAVED DESIGN
-
-           First use the dedicated GET-by-id endpoint.
-           If that endpoint cannot find it, fall back to the
-           normal list endpoint and match the ID locally.
-        ===================================================== */
-
-        if (designIdParam) {
-          const designId = toNumber(designIdParam);
-
-          if (designId === null || designId <= 0) {
-            throw new Error("Invalid saved design ID.");
-          }
-
-          let design: any = null;
-
-          /* Attempt 1: dedicated GET-by-id endpoint. */
-          try {
-            const directResponse = await fetch(
-              `/api/designs?id=${encodeURIComponent(String(designId))}&_=${Date.now()}`,
-              {
-                cache: "no-store",
-              }
-            );
-
-            const directPayload = await readJson(directResponse);
-
-            if (directResponse.ok && directPayload?.id != null) {
-              design = directPayload;
-            }
-          } catch (directError) {
-            console.error(
-              "Direct saved-design request failed:",
-              directError
-            );
-          }
-
-          /* Attempt 2: fetch all designs and find the ID locally. */
-          if (!design) {
-            const listResponse = await fetch(
-              `/api/designs?_=${Date.now()}`,
-              {
-                cache: "no-store",
-              }
-            );
-
-            const listPayload = await readJson(listResponse);
-
-            if (!listResponse.ok) {
-              throw new Error(
-                listPayload?.error ||
-                  listPayload?.details ||
-                  `Failed to load saved designs (status ${listResponse.status}).`
-              );
-            }
-
-            const designs = normalizeDesignPayload(listPayload);
-
-            design = designs.find(
-              item => toNumber(item?.id) === designId
-            ) || null;
-          }
-
-          if (!design) {
-            throw new Error(
-              `Saved design #${designId} could not be loaded.`
-            );
-          }
-
-          if (cancelled) {
-            return;
-          }
-
-          setCurrentDesignId(
-            toNumber(design.id)
-          );
-
-          setCurrentDesignName(
-            typeof design.name === "string" && design.name.trim()
-              ? design.name
-              : "Saved Design"
-          );
-
-          const savedThemeId =
-            design.themeId === null ||
-            design.themeId === undefined ||
-            design.themeId === ""
-              ? null
-              : toNumber(design.themeId);
-
-          setSelectedThemeId(
-            savedThemeId
-          );
-
-          /* ===================================================
-             LOAD THE VENUE BELONGING TO THE SAVED DESIGN
-          =================================================== */
-
-          const savedVenueId = toNumber(
-            design.venueId
-          );
-
-          if (savedVenueId !== null) {
-            const venueResponse = await fetch(
-              `/api/venues?id=${encodeURIComponent(String(savedVenueId))}&_=${Date.now()}`,
-              {
-                cache: "no-store",
-              }
-            );
-
-            const venuePayload = await readJson(
-              venueResponse
-            );
-
-            if (!venueResponse.ok) {
-              throw new Error(
-                venuePayload?.error ||
-                  venuePayload?.details ||
-                  `Failed to load venue #${savedVenueId}.`
-              );
-            }
-
-            loadedVenue = Array.isArray(venuePayload)
-              ? venuePayload.find(
-                  (item: Venue) =>
-                    Number(item.id) === savedVenueId
-                ) || null
-              : venuePayload;
-
-            if (!loadedVenue) {
-              throw new Error(
-                `Venue #${savedVenueId} could not be loaded.`
-              );
-            }
-
-            setVenue(loadedVenue);
-
-            localStorage.setItem(
-              "selectedVenue",
-              JSON.stringify(loadedVenue)
-            );
-
-            localStorage.setItem(
-              "selectedVenueId",
-              String(loadedVenue.id)
-            );
-          }
-
-          /* ===================================================
-             RESTORE THE SAVED FURNITURE LAYOUT
-          =================================================== */
-
-          let savedLayout: any = null;
-
-          try {
-            savedLayout =
-              typeof design.layoutData === "string"
-                ? JSON.parse(design.layoutData)
-                : design.layoutData;
-          } catch {
-            savedLayout = null;
-          }
-
-          if (!savedLayout || !Array.isArray(savedLayout.items)) {
-            throw new Error(
-              "This saved design contains invalid layout data."
-            );
-          }
-
-          if (!cancelled) {
-            setItems(savedLayout.items);
-
-            setSelectedId(
-              savedLayout.items.length > 0
-                ? Number(savedLayout.items[0].id)
-                : null
-            );
-          }
-
-          return;
-        }
-
-        /* =====================================================
-           NO SAVED DESIGN: LOAD VENUE FROM URL
-        ===================================================== */
-
-        if (venueIdParam) {
-          const venueId = toNumber(venueIdParam);
-
-          if (venueId === null || venueId <= 0) {
-            throw new Error("Invalid venue ID.");
-          }
-
-          const venueResponse = await fetch(
-            `/api/venues?id=${encodeURIComponent(String(venueId))}&_=${Date.now()}`,
-            {
-              cache: "no-store",
-            }
-          );
-
-          const venuePayload = await readJson(
-            venueResponse
-          );
-
-          if (!venueResponse.ok) {
-            throw new Error(
-              venuePayload?.error ||
-                venuePayload?.details ||
-                `Failed to load venue #${venueId}.`
-            );
-          }
-
-          loadedVenue = extractVenuePayload(venuePayload, venueId);
-
-          if (!loadedVenue) {
-            throw new Error(
-              `Venue #${venueId} could not be loaded.`
-            );
-          }
-
-          setVenue(loadedVenue);
-
-          localStorage.setItem(
-            "selectedVenue",
-            JSON.stringify(loadedVenue)
-          );
-
-          localStorage.setItem(
-            "selectedVenueId",
-            String(loadedVenue.id)
-          );
-
-          /* =================================================
-             PHASE 5: LOAD MATCHED DESIGN SAFELY
-
-             A matched design is a one-time localStorage handoff
-             from /match. It must never crash the Designer.
-             If the handoff is stale, malformed, or belongs to a
-             different venue, it is simply discarded and the normal
-             venue layout continues to load.
-          ================================================= */
-          const matchedDesignRequested =
-            params.get("matchedDesign") === "1";
-
-          if (matchedDesignRequested) {
-            let matchedDesign: MatchedDesignPayload | null = null;
-
-            try {
-              const rawMatchedDesign = localStorage.getItem("matched-design");
-              matchedDesign = rawMatchedDesign
-                ? (JSON.parse(rawMatchedDesign) as MatchedDesignPayload)
-                : null;
-            } catch (matchedDesignError) {
-              console.warn(
-                "Ignoring invalid matched-design handoff:",
-                matchedDesignError
-              );
-            }
-
-            const handoffVenueId = Number(matchedDesign?.venueId);
-            const venueMatches =
-              matchedDesign &&
-              Number.isFinite(handoffVenueId) &&
-              handoffVenueId === Number(loadedVenue.id);
-
-            if (venueMatches) {
-              const matchedItems = createMatchedFurnitureItems(
-                matchedDesign?.inventory
-              );
-
-              if (!cancelled) {
-                setItems(matchedItems);
-                setSelectedId(
-                  matchedItems.length > 0
-                    ? matchedItems[0].id
-                    : null
-                );
-              }
-
-              // Consume only a valid handoff after it has been applied.
-              localStorage.removeItem("matched-design");
-              return;
-            }
-
-            // Never throw for a stale handoff. Remove it and continue.
-            localStorage.removeItem("matched-design");
-          }
-
-          if (loadedVenue.layoutData) {
-            try {
-              const saved =
-                typeof loadedVenue.layoutData === "string"
-                  ? JSON.parse(loadedVenue.layoutData)
-                  : loadedVenue.layoutData;
-
-              if (Array.isArray(saved?.items)) {
-                setItems(saved.items);
-                setSelectedId(
-                  saved.items.length > 0
-                    ? Number(saved.items[0].id)
-                    : null
-                );
-              }
-            } catch {
-              console.log(
-                "No valid saved venue layout."
-              );
-            }
-          }
-        }
-      } catch (err) {
-        console.error(
-          "Unable to load editor:",
-          err
-        );
-
-        if (!cancelled) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Unable to load editor."
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadEditor();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  /* =======================================================
-     APPLY SAVED THEME AFTER THEMES LOAD
-  ======================================================= */
-
-  useEffect(() => {
-    if (selectedThemeId === null) {
-      setSelectedTheme(null);
+    const params =
+      new URLSearchParams(
+        window.location.search
+      );
+
+    const idParam =
+      params.get(
+        "venueId"
+      );
+
+    if (!idParam) {
+      setLoading(false);
       return;
     }
 
-    const foundTheme = themes.find(theme => theme.id === selectedThemeId) || null;
-    setSelectedTheme(foundTheme);
-  }, [themes, selectedThemeId]);
+    const id =
+      Number(idParam);
+
+    async function loadVenue() {
+      try {
+        const response =
+          await fetch(
+            `/api/venues?id=${id}`
+          );
+
+        if (!response.ok) {
+          throw new Error(
+            "Failed to load venue"
+          );
+        }
+
+        const data =
+          await response.json();
+
+        const loadedVenue =
+          Array.isArray(data)
+            ? data.find(
+                (
+                  item: Venue
+                ) =>
+                  item.id ===
+                  id
+              ) ||
+              data[0]
+            : data;
+
+        setVenue(
+          loadedVenue ||
+            null
+        );
+
+        if (
+          loadedVenue?.layoutData
+        ) {
+          try {
+            const saved =
+              JSON.parse(
+                loadedVenue.layoutData
+              );
+
+            if (
+              Array.isArray(
+                saved.items
+              )
+            ) {
+              setItems(
+                saved.items
+              );
+
+              if (
+                saved.items
+                  .length >
+                0
+              ) {
+                setSelectedId(
+                  saved
+                    .items[0]
+                    .id
+                );
+              }
+            }
+          } catch {
+            console.log(
+              "No valid saved layout."
+            );
+          }
+        }
+      } catch (err) {
+        console.error(err);
+
+        setError(
+          "Unable to load venue."
+        );
+      } finally {
+        setLoading(
+          false
+        );
+      }
+    }
+
+    loadVenue();
+  }, []);
 
   /* =======================================================
      KEYBOARD CONTROLS
@@ -2709,16 +1599,12 @@ useEffect(() => {
         return;
       }
 
-      /* ROTATE */
-
       if (
         e.key.toLowerCase() ===
         "r"
       ) {
         rotateSelected();
       }
-
-      /* DELETE */
 
       if (
         e.key === "Delete" ||
@@ -2727,8 +1613,6 @@ useEffect(() => {
       ) {
         deleteSelected();
       }
-
-      /* MOVEMENT */
 
       const amount =
         e.shiftKey
@@ -2766,10 +1650,7 @@ useEffect(() => {
         dz = amount;
       }
 
-      if (
-        dx !== 0 ||
-        dz !== 0
-      ) {
+      if (dx !== 0 || dz !== 0) {
         e.preventDefault();
 
         setItems(
@@ -2780,20 +1661,19 @@ useEffect(() => {
                 selectedId
                   ? {
                       ...item,
-
                       position:
                         [
                           THREE.MathUtils.clamp(
-                            item.position[0] +
+                            item
+                              .position[0] +
                               dx,
                             -5.5,
                             5.5
                           ),
-
                           0,
-
                           THREE.MathUtils.clamp(
-                            item.position[2] +
+                            item
+                              .position[2] +
                               dz,
                             -5.5,
                             5.5
@@ -2819,77 +1699,23 @@ useEffect(() => {
   });
 
   /* =======================================================
-     ADD INVENTORY ITEM
+     ADD ELEMENT
   ======================================================= */
 
   function addItem(
-    inventoryItem: InventoryItem
+    type: ElementType
   ) {
-    /*
-       Do not allow an item with
-       zero available quantity.
-    */
-
-    if (
-      inventoryItem.availableQuantity <=
-      0
-    ) {
-      alert(
-        "This item is currently unavailable."
-      );
-
-      return;
-    }
-
     const id =
       Date.now();
 
-    /*
-       Convert the inventory category
-       into one of our supported
-       visual types.
-
-       The actual model comes from
-       inventoryItem.modelUrl.
-    */
-
-    const type =
-      getElementType(
-        inventoryItem.category
-      );
-
     const item: FurnitureItem = {
       id,
-
-      inventoryId:
-        inventoryItem.id,
-
       type,
-
-      name:
-        inventoryItem.name,
-
-      modelUrl:
-        inventoryItem.modelUrl,
-
-      imageUrl:
-        inventoryItem.imageUrl,
-
-      width:
-        inventoryItem.width,
-
-      depth:
-        inventoryItem.depth,
-
-      height:
-        inventoryItem.height,
-
       position: [
         0,
         0,
         0,
       ],
-
       rotation: 0,
     };
 
@@ -2900,60 +1726,8 @@ useEffect(() => {
       ]
     );
 
-    setSelectedId(
-      id
-    );
+    setSelectedId(id);
   }
-
-  /* =======================================================
-     ADD INVENTORY ITEM FROM INVENTORY PAGE
-  ======================================================= */
-
-  useEffect(() => {
-    /*
-       Wait until the venue/layout has finished loading.
-
-       The inventory page stores the selected inventory
-       item in localStorage before opening this page.
-    */
-
-    if (loading) {
-      return;
-    }
-
-    const pendingItem =
-      localStorage.getItem(
-        "design-item"
-      );
-
-    if (!pendingItem) {
-      return;
-    }
-
-    try {
-      const inventoryItem =
-        JSON.parse(
-          pendingItem
-        ) as InventoryItem;
-
-      localStorage.removeItem(
-        "design-item"
-      );
-
-      addItem(
-        inventoryItem
-      );
-    } catch (err) {
-      console.error(
-        "Unable to add inventory item to design:",
-        err
-      );
-
-      localStorage.removeItem(
-        "design-item"
-      );
-    }
-  }, [loading]);
 
   /* =======================================================
      MOVE ELEMENT
@@ -3000,7 +1774,6 @@ useEffect(() => {
             selectedId
               ? {
                   ...item,
-
                   rotation:
                     item.rotation +
                     Math.PI /
@@ -3058,10 +1831,6 @@ useEffect(() => {
     );
   }
 
-  /* =======================================================
-     SELECT MEASUREMENT ITEM
-  ======================================================= */
-
   function selectMeasurementItem(
     id: number
   ) {
@@ -3092,10 +1861,6 @@ useEffect(() => {
     );
   }
 
-  /* =======================================================
-     CLEAR MEASUREMENT
-  ======================================================= */
-
   function clearMeasurement() {
     setMeasurementStartId(
       null
@@ -3111,122 +1876,86 @@ useEffect(() => {
   }
 
   /* =======================================================
-     SAVE SCENE
+     SAVE
   ======================================================= */
 
   async function saveScene() {
-    const sceneData: SavedScene = { items };
+    const sceneData: SavedScene =
+      {
+        items,
+      };
 
     if (!venue) {
-      alert("Please select a venue before saving your design.");
+      localStorage.setItem(
+        "wedding-design",
+        JSON.stringify(
+          sceneData
+        )
+      );
+
+      alert(
+        "Design saved!"
+      );
+
       return;
     }
 
     try {
-      setSaving(true);
-
-      const venueResponse = await fetch("/api/venues", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: venue.id,
-          name: venue.name,
-          location: venue.location,
-          capacity: venue.capacity,
-          type: venue.type,
-          price: venue.price,
-          availability: venue.availability,
-          modelUrl: venue.modelUrl,
-          layoutData: JSON.stringify(sceneData),
-        }),
-      });
-
-      if (!venueResponse.ok) {
-        throw new Error("Failed to save venue layout");
-      }
-
-      /* Update an existing saved design in place. */
-      if (currentDesignId !== null) {
-        const updateResponse = await fetch("/api/designs", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: currentDesignId,
-            name:
-              currentDesignName.trim() ||
-              `${venue.name} Design`,
-            venueId: venue.id,
-            themeId: selectedTheme?.id ?? null,
-            layoutData: JSON.stringify(sceneData),
-          }),
-        });
-
-        const updateData = await updateResponse
-          .json()
-          .catch(() => null);
-
-        if (!updateResponse.ok) {
-          throw new Error(
-            updateData?.error ||
-              updateData?.details ||
-              "Failed to update saved design"
-          );
-        }
-
-        setCurrentDesignName(updateData?.name || currentDesignName);
-        setSelectedThemeId(
-          updateData?.themeId === null ||
-          updateData?.themeId === undefined
-            ? selectedTheme?.id ?? null
-            : Number(updateData.themeId)
-        );
-
-        alert(
-          "Design updated successfully with the selected theme!"
-        );
-        return;
-      }
-
-      const designName = window.prompt(
-        "Enter a name for your design:",
-        `${venue.name} Design`
+      setSaving(
+        true
       );
 
-      if (designName === null) return;
-      if (!designName.trim()) {
-        alert("Please enter a valid design name.");
-        return;
+      const response =
+        await fetch(
+          "/api/venues",
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify(
+              {
+                id: venue.id,
+                name: venue.name,
+                location:
+                  venue.location,
+                capacity:
+                  venue.capacity,
+                type: venue.type,
+                price: venue.price,
+                availability:
+                  venue.availability,
+                modelUrl:
+                  venue.modelUrl,
+                layoutData:
+                  JSON.stringify(
+                    sceneData
+                  ),
+              }
+            ),
+          }
+        );
+
+      if (!response.ok) {
+        throw new Error(
+          "Failed to save"
+        );
       }
 
-      const designResponse = await fetch("/api/designs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: designName.trim(),
-          venueId: venue.id,
-          themeId: selectedTheme?.id ?? null,
-          layoutData: JSON.stringify(sceneData),
-        }),
-      });
-
-      const designData = await designResponse.json().catch(() => null);
-      if (!designResponse.ok) {
-        throw new Error(designData?.error || "Failed to save design");
-      }
-
-      setCurrentDesignId(Number(designData.id));
-      setCurrentDesignName(designData.name || designName.trim());
-      setSelectedThemeId(
-        designData.themeId ?? selectedTheme?.id ?? null
+      alert(
+        "Design saved successfully!"
       );
-
-      window.history.replaceState({}, "", `/?venueId=${venue.id}&designId=${designData.id}`);
-      alert("Design saved successfully! You can now find it in Saved Designs.");
     } catch (err) {
-      console.error("Save design error:", err);
-      alert(err instanceof Error ? err.message : "Could not save design.");
+      console.error(err);
+
+      alert(
+        "Could not save design."
+      );
     } finally {
-      setSaving(false);
+      setSaving(
+        false
+      );
     }
   }
 
@@ -3242,10 +1971,6 @@ useEffect(() => {
     );
   }
 
-  /* =======================================================
-     ERROR
-  ======================================================= */
-
   if (error) {
     return (
       <div className="loading">
@@ -3254,10 +1979,6 @@ useEffect(() => {
     );
   }
 
-  /* =======================================================
-     SELECTED ITEM
-  ======================================================= */
-
   const selected =
     items.find(
       item =>
@@ -3265,20 +1986,12 @@ useEffect(() => {
         selectedId
     );
 
-  /* =======================================================
-     MEASUREMENT START
-  ======================================================= */
-
   const measurementStart =
     items.find(
       item =>
         item.id ===
         measurementStartId
     );
-
-  /* =======================================================
-     MEASUREMENT END
-  ======================================================= */
 
   const measurementEnd =
     items.find(
@@ -3290,104 +2003,55 @@ useEffect(() => {
   return (
     <>
       <div className="editor">
-
-        {/* =================================================
-            TOP BAR
-        ================================================= */}
-
         <TopBar
           venue={venue}
           saving={saving}
-          saveScene={
-            saveScene
-          }
-          viewMode={
-            viewMode
-          }
+          saveScene={saveScene}
+          viewMode={viewMode}
           setViewMode={
             setViewMode
           }
-          selectedTheme={selectedTheme}
-          onSwitchTheme={() => setThemeModalOpen(true)}
         />
 
         <div className="editor-body">
-
-          {/* =================================================
-              LEFT NAVIGATION
-          ================================================= */}
-
           <LeftNav
-            active={
-              activeNav
-            }
+            active={activeNav}
             setActive={
               setActiveNav
             }
           />
 
-          {/* =================================================
-              BUILD PANEL
-          ================================================= */}
-
           {activeNav ===
             "Build" && (
             <BuildPanel
-              addItem={
-                addItem
-              }
-
+              addItem={addItem}
               measureMode={
                 measureMode
               }
-
               startMeasurement={
                 startMeasurement
-              }
-
-              inventory={
-                inventory
-              }
-
-              inventoryLoading={
-                inventoryLoading
               }
             />
           )}
 
-          {/* =================================================
-              WORKSPACE
-          ================================================= */}
-
-          <div
-            className="workspace"
-            style={{
-              background: selectedTheme?.secondaryColor || undefined,
-              transition: "background 0.3s ease",
-            }}
-          >
-
+          <div className="workspace">
             <Canvas
               shadows={
                 viewMode ===
                 "3D"
               }
-
               camera={{
                 position: [
                   8,
                   8,
                   8,
                 ],
-
                 fov: 45,
               }}
             >
-
               {/* =================================================
                   2D CAMERA
               ================================================= */}
-
               {viewMode ===
                 "2D" && (
                 <OrthographicCamera
@@ -3407,13 +2071,8 @@ useEffect(() => {
                 />
               )}
 
-              {/* =================================================
-                  FLOOR
-              ================================================= */}
-
+              {/* FLOOR */}
               <Floor
-                primaryColor={selectedTheme?.primaryColor || "#2563eb"}
-                secondaryColor={selectedTheme?.secondaryColor || "#f8fafc"}
                 onClear={() => {
                   if (
                     !measureMode
@@ -3424,6 +2083,19 @@ useEffect(() => {
                   }
                 }}
               />
+
+              {/* =================================================
+                  UPLOADED VENUE GLB
+              ================================================= */}
+              {viewMode === "3D" &&
+                venue?.modelUrl && (
+                  <Suspense fallback={null}>
+                    <VenueModel
+                      key={venue.modelUrl}
+                      url={venue.modelUrl}
+                    />
+                  </Suspense>
+                )}
 
               {/* =================================================
                   FURNITURE
@@ -3437,45 +2109,37 @@ useEffect(() => {
                       key={
                         item.id
                       }
-
                       item={
                         item
                       }
-
                       selected={
                         selectedId ===
                         item.id
                       }
-
                       measureMode={
                         measureMode
                       }
-
                       measureSelected={
                         measurementStartId ===
                           item.id ||
                         measurementEndId ===
                           item.id
                       }
-
                       onSelect={() =>
                         setSelectedId(
                           item.id
                         )
                       }
-
                       onMeasureSelect={() =>
                         selectMeasurementItem(
                           item.id
                         )
                       }
-
-                      onMove={
-                        position =>
-                          moveItem(
-                            item.id,
-                            position
-                          )
+                      onMove={position =>
+                        moveItem(
+                          item.id,
+                          position
+                        )
                       }
                     />
                   ) : (
@@ -3483,71 +2147,56 @@ useEffect(() => {
                       key={
                         item.id
                       }
-
                       item={
                         item
                       }
-
                       selected={
                         selectedId ===
                         item.id
                       }
-
                       measureMode={
                         measureMode
                       }
-
                       measureSelected={
                         measurementStartId ===
                           item.id ||
                         measurementEndId ===
                           item.id
                       }
-
                       onSelect={() =>
                         setSelectedId(
                           item.id
                         )
                       }
-
                       onMeasureSelect={() =>
                         selectMeasurementItem(
                           item.id
                         )
                       }
-
-                      onMove={
-                        position =>
-                          moveItem(
-                            item.id,
-                            position
-                          )
+                      onMove={position =>
+                        moveItem(
+                          item.id,
+                          position
+                        )
                       }
                     />
                   )
               )}
 
-              {/* =================================================
-                  MEASUREMENT
-              ================================================= */}
-
+              {/* MEASUREMENT */}
               {measurementStart &&
                 measurementEnd && (
-                <Measurement
-                  start={
-                    measurementStart
-                  }
+                  <Measurement
+                    start={
+                      measurementStart
+                    }
+                    end={
+                      measurementEnd
+                    }
+                  />
+                )}
 
-                  end={
-                    measurementEnd
-                  }
-                />
-              )}
-
-              {/* =================================================
-                  LIGHTING
-              ================================================= */}
-
+              {/* LIGHTING */}
               <ambientLight
                 intensity={
                   viewMode ===
@@ -3584,26 +2233,18 @@ useEffect(() => {
                 intensity={0.5}
               />
 
-              {/* =================================================
-                  CAMERA CONTROLS
-              ================================================= */}
-
+              {/* CAMERA CONTROLS */}
               <OrbitControls
                 makeDefault
-
                 enableRotate={
                   viewMode ===
                   "3D"
                 }
-
                 enablePan={
                   true
                 }
-
                 minDistance={3}
-
                 maxDistance={18}
-
                 maxPolarAngle={
                   Math.PI /
                   2.05
@@ -3652,38 +2293,28 @@ useEffect(() => {
               </div>
             )}
 
-            {/* =================================================
-                BOTTOM TOOLBAR
-            ================================================= */}
-
+            {/* BOTTOM TOOLBAR */}
             <BottomToolbar
               startMeasurement={
                 startMeasurement
               }
-
               measureMode={
                 measureMode
               }
-
               clearMeasurement={
                 clearMeasurement
               }
             />
           </div>
 
-          {/* =================================================
-              PROPERTIES
-          ================================================= */}
-
+          {/* PROPERTIES */}
           <PropertiesPanel
             selected={
               selected
             }
-
             deleteSelected={
               deleteSelected
             }
-
             rotateSelected={
               rotateSelected
             }
@@ -3692,7 +2323,7 @@ useEffect(() => {
       </div>
 
       {/* =====================================================
-          GLOBAL STYLES
+          CSS
       ===================================================== */}
 
       <style jsx global>{`
@@ -3700,30 +2331,26 @@ useEffect(() => {
           box-sizing: border-box;
         }
 
-        html,
         body {
           margin: 0;
           padding: 0;
-          width: 100%;
-          height: 100%;
           overflow: hidden;
           font-family:
+            Inter,
             Arial,
             sans-serif;
+          color: #1f2937;
+          background: #f1f2f4;
         }
 
         button {
-          font-family:
-            inherit;
+          font-family: inherit;
         }
 
         .editor {
           width: 100vw;
           height: 100vh;
-          display: flex;
-          flex-direction: column;
-          background: #f3f4f6;
-          color: #374151;
+          background: #f1f2f4;
         }
 
         /* =====================================================
@@ -3731,202 +2358,173 @@ useEffect(() => {
         ===================================================== */
 
         .topbar {
-          min-height: 76px;
-          flex-shrink: 0;
-          position: relative;
-          display: grid;
-          grid-template-columns: auto minmax(0, 1fr) auto auto;
-          align-items: center;
-          column-gap: 16px;
-          padding: 0 22px;
-          background: #ffffff;
+          height: 68px;
+          background: white;
           border-bottom: 1px solid #dfe2e6;
-          box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
-          z-index: 30;
-          overflow: visible;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 20px;
+          position: relative;
+          z-index: 50;
+          box-shadow:
+            0 1px 4px
+            rgba(0, 0, 0, 0.06);
         }
 
         .brand {
           display: flex;
           align-items: center;
-          gap: 11px;
+          gap: 10px;
+          min-width: 230px;
+          flex-shrink: 0;
+        }
+
+        .top-navigation {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          flex: 1;
           min-width: 0;
+          margin: 0 12px;
+          white-space: nowrap;
+        }
+
+        .top-nav-link {
           text-decoration: none;
-          color: inherit;
+          color: #475569;
+          font-size: 12px;
+          font-weight: 700;
+          padding: 9px 10px;
+          border-radius: 7px;
+          transition: background 0.15s, color 0.15s;
+        }
+
+        .top-nav-link:hover {
+          background: #eff6ff;
+          color: #2563eb;
+        }
+
+        .top-nav-active {
+          background: #e8f1ff;
+          color: #2563eb;
         }
 
         .brand-icon {
-          width: 40px;
-          height: 40px;
-          flex-shrink: 0;
-          border-radius: 10px;
+          width: 34px;
+          height: 34px;
+          border-radius: 9px;
           background: #2563eb;
           color: white;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 19px;
           font-weight: 900;
-          box-shadow: 0 6px 16px rgba(37, 99, 235, 0.2);
+          font-size: 17px;
         }
 
         .brand-title {
-          font-size: 16px;
-          font-weight: 900;
-          color: #1f2937;
-          letter-spacing: 0.1px;
+          font-size: 15px;
+          font-weight: 800;
+          color: #273444;
         }
 
         .brand-subtitle {
           font-size: 10px;
-          color: #64748b;
-          margin-top: 3px;
-          font-weight: 600;
-        }
-
-        .main-navigation {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 4px;
-          min-width: 0;
-          width: 100%;
-          padding: 5px;
-          border: 1px solid #e2e8f0;
-          background: #f8fafc;
-          border-radius: 12px;
-          white-space: nowrap;
-          overflow-x: auto;
-          scrollbar-width: thin;
-        }
-
-        .top-nav-link {
-          text-decoration: none;
-          color: #334155;
-          padding: 9px 12px;
-          border-radius: 8px;
-          font-size: 12px;
-          font-weight: 800;
-          transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
-        }
-
-        .top-nav-link:hover {
-          background: #2563eb;
-          color: #ffffff;
-          transform: translateY(-1px);
-        }
-
-        /* The Designer link is intentionally styled as the current page in the editor. */
-        .top-nav-link:first-child {
-          background: #e0ecff;
-          color: #1d4ed8;
+          color: #8b95a1;
+          margin-top: 2px;
         }
 
         .project-title {
-          position: static;
-          transform: none;
           text-align: center;
-          min-width: 130px;
-          max-width: 220px;
-          pointer-events: none;
+          flex-shrink: 0;
+          min-width: 150px;
         }
 
         .project-small {
           font-size: 9px;
-          color: #94a3b8;
-          font-weight: 800;
-          letter-spacing: 1.2px;
+          color: #9ca3af;
+          letter-spacing: 1px;
+          font-weight: 700;
         }
 
         .project-name {
-          font-size: 14px;
-          font-weight: 900;
-          color: #334155;
-          margin-top: 3px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
+          font-size: 17px;
+          font-weight: 800;
+          color: #374151;
+          margin-top: 2px;
         }
 
         .top-actions {
-          display: flex;
-          align-items: center;
-          justify-content: flex-end;
-          gap: 10px;
-          margin-left: auto;
+          min-width: 300px;
           flex-shrink: 0;
-          white-space: nowrap;
+          display: flex;
+          justify-content: flex-end;
+          align-items: center;
+          gap: 12px;
         }
 
         .saved-status {
-          font-size: 11px;
-          color: #15803d;
-          font-weight: 800;
-        }
-
-        .status-dot {
-          font-size: 10px;
+          color: #16a34a;
+          font-size: 12px;
+          font-weight: 700;
         }
 
         .save-button {
           border: none;
           background: #2563eb;
-          color: #ffffff;
-          border-radius: 8px;
-          padding: 10px 14px;
+          color: white;
+          border-radius: 7px;
+          padding: 10px 16px;
           cursor: pointer;
-          font-size: 12px;
           font-weight: 800;
-          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.22);
-          transition: background 0.18s ease, transform 0.18s ease;
+          box-shadow:
+            0 2px 5px
+            rgba(
+              37,
+              99,
+              235,
+              0.25
+            );
         }
 
-        .save-button:hover:not(:disabled) {
+        .save-button:hover {
           background: #1d4ed8;
-          transform: translateY(-1px);
-        }
-
-        .save-button:disabled {
-          opacity: 0.7;
-          cursor: wait;
         }
 
         .view-toggle {
           display: flex;
-          border: 1px solid #d7dce2;
+          border: 1px solid #d1d5db;
           border-radius: 8px;
           overflow: hidden;
-          background: #f8fafc;
+          background: #f9fafb;
         }
 
         .view-toggle button {
           border: none;
           background: transparent;
-          padding: 9px 12px;
+          padding: 9px 15px;
           cursor: pointer;
-          font-size: 11px;
           font-weight: 800;
-          color: #64748b;
-          transition: background 0.18s ease, color 0.18s ease;
+          color: #6b7280;
         }
 
-        .view-toggle button + button {
-          border-left: 1px solid #d7dce2;
-        }
-
-        .view-toggle .view-active {
+        .view-toggle
+          .view-active {
           background: #2563eb;
-          color: #ffffff;
+          color: white;
         }
 
         /* =====================================================
-           EDITOR BODY
+           BODY
         ===================================================== */
 
         .editor-body {
-          flex: 1;
-          min-height: 0;
           display: flex;
+          height: calc(
+            100vh - 68px
+          );
         }
 
         /* =====================================================
@@ -3934,40 +2532,43 @@ useEffect(() => {
         ===================================================== */
 
         .left-nav {
-          width: 72px;
-          flex-shrink: 0;
-          background: #ffffff;
+          width: 76px;
+          background: white;
           border-right: 1px solid #dfe2e6;
+          padding: 12px 7px;
           display: flex;
           flex-direction: column;
-          padding: 10px 7px;
-          z-index: 25;
+          gap: 6px;
+          z-index: 30;
         }
 
         .nav-item {
-          width: 100%;
           border: none;
           background: transparent;
-          border-radius: 7px;
-          padding: 10px 4px;
+          border-radius: 8px;
+          min-height: 64px;
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 4px;
-          color: #697586;
-          cursor: pointer;
-          font-size: 9px;
+          justify-content: center;
+          gap: 5px;
+          color: #596574;
+          font-size: 10px;
           font-weight: 700;
-        }
-
-        .nav-item:hover,
-        .nav-item.active {
-          background: #eff6ff;
-          color: #2563eb;
+          cursor: pointer;
         }
 
         .nav-icon {
-          font-size: 17px;
+          font-size: 18px;
+        }
+
+        .nav-item:hover {
+          background: #f3f4f6;
+        }
+
+        .nav-item.active {
+          background: #e8f1ff;
+          color: #2563eb;
         }
 
         .nav-spacer {
@@ -3980,36 +2581,40 @@ useEffect(() => {
 
         .build-panel {
           width: 285px;
-          flex-shrink: 0;
-          background: #ffffff;
+          background: white;
           border-right: 1px solid #dfe2e6;
-          overflow-y: auto;
           z-index: 25;
+          box-shadow:
+            2px 0 7px
+            rgba(0, 0, 0, 0.04);
         }
 
         .panel-heading {
-          padding: 18px 20px;
+          font-size: 21px;
+          font-weight: 800;
+          padding: 23px 20px 18px;
           border-bottom: 1px solid #edf0f2;
-          font-size: 17px;
-          font-weight: 900;
-          color: #374151;
         }
 
         .panel-content {
-          padding: 18px;
+          padding: 20px;
+          overflow-y: auto;
+          height: calc(
+            100% - 67px
+          );
         }
 
         .section-title {
-          font-size: 11px;
-          text-transform: uppercase;
-          letter-spacing: 0.7px;
-          color: #7b8490;
-          font-weight: 900;
+          font-size: 13px;
+          color: #667281;
+          font-weight: 800;
           margin-bottom: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
         }
 
         .section-title.second {
-          margin-top: 23px;
+          margin-top: 28px;
         }
 
         .element-list {
@@ -4020,34 +2625,27 @@ useEffect(() => {
 
         .element-button {
           width: 100%;
-          border: 1px solid #d7dce2;
-          background: white;
+          border: 1px solid #e2e5e9;
+          background: #f8f9fa;
           border-radius: 8px;
-          padding: 10px;
+          padding: 12px 13px;
           display: flex;
           align-items: center;
-          gap: 10px;
-          color: #374151;
+          gap: 13px;
+          font-size: 13px;
           font-weight: 700;
+          color: #374151;
           cursor: pointer;
           text-align: left;
-          transition: 0.15s ease;
+          transition: 0.15s;
         }
 
         .element-button:hover {
           border-color: #93c5fd;
           background: #eff6ff;
-          transform: translateX(2px);
-        }
-
-        .element-button:disabled {
-          cursor: not-allowed;
-          transform: none;
-        }
-
-        .element-button:disabled:hover {
-          border-color: #d7dce2;
-          background: white;
+          transform: translateX(
+            2px
+          );
         }
 
         .element-icon {
@@ -4187,7 +2785,6 @@ useEffect(() => {
 
         .properties-panel {
           width: 270px;
-          flex-shrink: 0;
           background: white;
           border-left: 1px solid #dfe2e6;
           padding: 20px;
@@ -4421,7 +3018,32 @@ useEffect(() => {
            RESPONSIVE
         ===================================================== */
 
+        @media (max-width: 1250px) {
+          .top-navigation {
+            gap: 1px;
+            margin: 0 6px;
+          }
+
+          .top-nav-link {
+            padding: 8px 7px;
+            font-size: 11px;
+          }
+
+          .top-actions {
+            min-width: auto;
+            gap: 8px;
+          }
+
+          .saved-status {
+            display: none;
+          }
+        }
+
         @media (max-width: 1100px) {
+          .top-navigation {
+            display: none;
+          }
+
           .properties-panel {
             width: 230px;
           }
@@ -4452,111 +3074,14 @@ useEffect(() => {
             display: none;
           }
         }
-
-        @media (max-width: 1250px) {
-          .project-title {
-            display: none;
-          }
-
-          .main-navigation {
-            flex: 1 1 auto;
-            justify-content: flex-start;
-            overflow-x: auto;
-            scrollbar-width: thin;
-          }
-        }
-
-        @media (max-width: 900px) {
-          .topbar {
-            min-height: auto;
-            grid-template-columns: auto 1fr auto;
-            padding: 10px 14px;
-            row-gap: 10px;
-          }
-
-          .main-navigation {
-            grid-column: 1 / -1;
-            grid-row: 2;
-            width: auto;
-            justify-content: flex-start;
-            overflow-x: auto;
-          }
-
-          .saved-status {
-            display: none;
-          }
-        }
-
-        @media (max-width: 620px) {
-          .brand-subtitle {
-            display: none;
-          }
-
-          .brand-title {
-            font-size: 14px;
-          }
-
-          .top-nav-link {
-            padding: 8px 10px;
-            font-size: 11px;
-          }
-
-          .save-button {
-            padding: 9px 11px;
-          }
-        }
       `}</style>
-
-      {themeModalOpen && (
-        <div onClick={() => setThemeModalOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", zIndex: 1000 }}>
-          <div onClick={event => event.stopPropagation()} style={{ width: "min(760px, 100%)", maxHeight: "80vh", overflowY: "auto", background: "#ffffff", borderRadius: "20px", padding: "24px", boxShadow: "0 24px 80px rgba(15, 23, 42, 0.3)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center", marginBottom: "20px" }}>
-              <div>
-                <h2 style={{ margin: 0, color: "#0f172a" }}>Choose Your Wedding Theme</h2>
-                <p style={{ margin: "6px 0 0", color: "#64748b" }}>Switch themes anytime. Save the design to keep your selection.</p>
-              </div>
-              <button type="button" onClick={() => setThemeModalOpen(false)} style={{ border: "none", background: "#f1f5f9", borderRadius: "10px", padding: "8px 12px", cursor: "pointer", fontWeight: 700 }}>✕</button>
-            </div>
-
-            {themesLoading ? (
-              <p style={{ color: "#64748b" }}>Loading themes...</p>
-            ) : themes.length === 0 ? (
-              <p style={{ color: "#64748b" }}>No themes are available yet. Add themes from the Themes page first.</p>
-            ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "16px" }}>
-                {themes.map(theme => {
-                  const active = selectedTheme?.id === theme.id;
-                  const primary = theme.primaryColor || "#2563eb";
-                  const secondary = theme.secondaryColor || "#f8fafc";
-                  return (
-                    <button key={theme.id} type="button" onClick={() => { setSelectedTheme(theme); setSelectedThemeId(theme.id); setThemeModalOpen(false); }} style={{ textAlign: "left", border: active ? `3px solid ${primary}` : "1px solid #e2e8f0", borderRadius: "16px", padding: "16px", cursor: "pointer", background: secondary, boxShadow: active ? "0 10px 25px rgba(15, 23, 42, 0.12)" : "none" }}>
-                      <div style={{ width: "100%", height: "8px", borderRadius: "999px", background: primary, marginBottom: "14px" }} />
-                      <div style={{ color: "#0f172a", fontWeight: 800, fontSize: "16px" }}>{theme.name}</div>
-                      {theme.description && <p style={{ color: "#475569", fontSize: "13px", lineHeight: 1.5, margin: "8px 0" }}>{theme.description}</p>}
-                      {theme.decorationStyle && <div style={{ color: primary, fontSize: "12px", fontWeight: 800, marginTop: "10px" }}>✦ {theme.decorationStyle}</div>}
-                      {active && <div style={{ marginTop: "12px", color: primary, fontWeight: 800, fontSize: "13px" }}>✓ Currently Selected</div>}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </>
   );
 }
 
 /* =========================================================
-   PRELOAD DEFAULT GLB MODELS
+   PRELOAD ALL GLB MODELS
 ========================================================= */
-
-/*
-   These are only fallbacks for old objects.
-
-   Inventory models are loaded dynamically
-   using their database modelUrl.
-*/
 
 useGLTF.preload(
   "/models/SheenChair.glb"
