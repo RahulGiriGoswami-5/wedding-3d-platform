@@ -21,6 +21,8 @@ export async function GET(
     const idParam =
       searchParams.get("id");
 
+    /* GET ONE DESIGN */
+
     if (idParam) {
       const id =
         Number(idParam);
@@ -58,15 +60,23 @@ export async function GET(
       }
 
       return NextResponse.json(
-        design
+        design,
+        {
+          status: 200,
+        }
       );
     }
+
+    /* GET ALL DESIGNS */
 
     const designs =
       await db.orm.public.SavedDesign.all();
 
     return NextResponse.json(
-      designs
+      designs,
+      {
+        status: 200,
+      }
     );
   } catch (error) {
     console.error(
@@ -87,7 +97,7 @@ export async function GET(
 }
 
 /* =========================================================
-   POST — CREATE SAVED DESIGN
+   POST — CREATE OR DUPLICATE SAVED DESIGN
 ========================================================= */
 
 export async function POST(
@@ -96,6 +106,84 @@ export async function POST(
   try {
     const body =
       await request.json();
+
+    /* =====================================================
+       DUPLICATE DESIGN
+    ===================================================== */
+
+    if (body.action === "duplicate") {
+      const id =
+        Number(body.id);
+
+      if (
+        !Number.isInteger(id) ||
+        id <= 0
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Valid design ID is required",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      const existingDesign =
+        await db.orm.public.SavedDesign.first({
+          id,
+        });
+
+      if (!existingDesign) {
+        return NextResponse.json(
+          {
+            error:
+              "Saved design not found",
+          },
+          {
+            status: 404,
+          }
+        );
+      }
+
+      /*
+        Create a new independent design.
+
+        The venue, theme and layout are copied,
+        but the new design receives its own ID.
+      */
+
+      const duplicateName =
+        `${existingDesign.name} Copy`;
+
+      const duplicatedDesign =
+        await db.orm.public.SavedDesign.create({
+          name: duplicateName,
+          venueId:
+            existingDesign.venueId,
+          themeId:
+            existingDesign.themeId ?? null,
+          layoutData:
+            existingDesign.layoutData,
+        });
+
+      return NextResponse.json(
+        {
+          message:
+            "Design duplicated successfully",
+          design:
+            duplicatedDesign,
+        },
+        {
+          status: 201,
+        }
+      );
+    }
+
+    /* =====================================================
+       CREATE NEW DESIGN
+    ===================================================== */
 
     const name =
       cleanString(body.name);
@@ -176,6 +264,8 @@ export async function POST(
       );
     }
 
+    /* CHECK VENUE */
+
     const venue =
       await db.orm.public.Venue.first({
         id: venueId,
@@ -193,9 +283,9 @@ export async function POST(
       );
     }
 
-    if (
-      themeId !== null
-    ) {
+    /* CHECK THEME */
+
+    if (themeId !== null) {
       const theme =
         await db.orm.public.Theme.first({
           id: themeId,
@@ -213,6 +303,8 @@ export async function POST(
         );
       }
     }
+
+    /* CREATE DESIGN */
 
     const design =
       await db.orm.public.SavedDesign.create({
@@ -335,7 +427,10 @@ export async function PUT(
         });
 
     return NextResponse.json(
-      updatedDesign
+      updatedDesign,
+      {
+        status: 200,
+      }
     );
   } catch (error) {
     console.error(
@@ -405,10 +500,15 @@ export async function DELETE(
       .where({ id })
       .delete();
 
-    return NextResponse.json({
-      message:
-        "Saved design deleted successfully",
-    });
+    return NextResponse.json(
+      {
+        message:
+          "Saved design deleted successfully",
+      },
+      {
+        status: 200,
+      }
+    );
   } catch (error) {
     console.error(
       "Saved design DELETE error:",

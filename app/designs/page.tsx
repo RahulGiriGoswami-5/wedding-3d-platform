@@ -26,23 +26,22 @@ type Theme = {
   secondaryColor: string;
 };
 
+type MessageType = "success" | "error";
+
 export default function DesignsPage() {
-  const [designs, setDesigns] =
-    useState<SavedDesign[]>([]);
+  const [designs, setDesigns] = useState<SavedDesign[]>([]);
+  const [venues, setVenues] = useState<Venue[]>([]);
+  const [themes, setThemes] = useState<Theme[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [venues, setVenues] =
-    useState<Venue[]>([]);
-
-  const [themes, setThemes] =
-    useState<Theme[]>([]);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [message, setMessage] =
-    useState("");
+  const [message, setMessage] = useState("");
+  const [messageType, setMessageType] =
+    useState<MessageType>("success");
 
   const [deletingId, setDeletingId] =
+    useState<number | null>(null);
+
+  const [duplicatingId, setDuplicatingId] =
     useState<number | null>(null);
 
   const [editingDesign, setEditingDesign] =
@@ -53,6 +52,14 @@ export default function DesignsPage() {
 
   const [savingEdit, setSavingEdit] =
     useState(false);
+
+  function showMessage(
+    text: string,
+    type: MessageType = "success"
+  ) {
+    setMessage(text);
+    setMessageType(type);
+  }
 
   async function loadData() {
     try {
@@ -116,10 +123,11 @@ export default function DesignsPage() {
         error
       );
 
-      setMessage(
+      showMessage(
         error instanceof Error
           ? error.message
-          : "Unable to load saved designs."
+          : "Unable to load saved designs.",
+        "error"
       );
     } finally {
       setLoading(false);
@@ -130,9 +138,7 @@ export default function DesignsPage() {
     loadData();
   }, []);
 
-  function getVenue(
-    venueId: number
-  ) {
+  function getVenue(venueId: number) {
     return (
       venues.find(
         venue =>
@@ -153,6 +159,25 @@ export default function DesignsPage() {
         theme =>
           theme.id === themeId
       ) || null
+    );
+  }
+
+  function formatDate(
+    dateValue: string
+  ) {
+    const date = new Date(dateValue);
+
+    if (Number.isNaN(date.getTime())) {
+      return "Recently";
+    }
+
+    return date.toLocaleDateString(
+      undefined,
+      {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }
     );
   }
 
@@ -180,8 +205,9 @@ export default function DesignsPage() {
     const name = editName.trim();
 
     if (!name) {
-      setMessage(
-        "Please enter a design name."
+      showMessage(
+        "Please enter a design name.",
+        "error"
       );
 
       return;
@@ -191,11 +217,16 @@ export default function DesignsPage() {
       setSavingEdit(true);
       setMessage("");
 
+      /*
+        IMPORTANT:
+        Your /api/designs route uses PUT
+        for updating designs.
+      */
       const response =
         await fetch(
           "/api/designs",
           {
-            method: "PATCH",
+            method: "PUT",
 
             headers: {
               "Content-Type":
@@ -203,17 +234,12 @@ export default function DesignsPage() {
             },
 
             body: JSON.stringify({
-              id:
-                editingDesign.id,
-
+              id: editingDesign.id,
               name,
-
               venueId:
                 editingDesign.venueId,
-
               themeId:
                 editingDesign.themeId,
-
               layoutData:
                 editingDesign.layoutData,
             }),
@@ -242,8 +268,8 @@ export default function DesignsPage() {
           )
       );
 
-      setMessage(
-        "Design updated successfully."
+      showMessage(
+        "Design details updated successfully."
       );
 
       setEditingDesign(null);
@@ -254,13 +280,84 @@ export default function DesignsPage() {
         error
       );
 
-      setMessage(
+      showMessage(
         error instanceof Error
           ? error.message
-          : "Failed to update design."
+          : "Failed to update design.",
+        "error"
       );
     } finally {
       setSavingEdit(false);
+    }
+  }
+
+  async function duplicateDesign(
+    design: SavedDesign
+  ) {
+    try {
+      setDuplicatingId(design.id);
+      setMessage("");
+
+      const response =
+        await fetch(
+          "/api/designs",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              name:
+                `${design.name} Copy`,
+              venueId:
+                design.venueId,
+              themeId:
+                design.themeId,
+              layoutData:
+                design.layoutData,
+            }),
+          }
+        );
+
+      const data =
+        await response
+          .json()
+          .catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            "Failed to duplicate design"
+        );
+      }
+
+      setDesigns(
+        current => [
+          data,
+          ...current,
+        ]
+      );
+
+      showMessage(
+        `"${data.name}" was duplicated successfully.`
+      );
+    } catch (error) {
+      console.error(
+        "Duplicate design error:",
+        error
+      );
+
+      showMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to duplicate design.",
+        "error"
+      );
+    } finally {
+      setDuplicatingId(null);
     }
   }
 
@@ -317,7 +414,7 @@ export default function DesignsPage() {
           )
       );
 
-      setMessage(
+      showMessage(
         "Design deleted successfully."
       );
     } catch (error) {
@@ -326,10 +423,11 @@ export default function DesignsPage() {
         error
       );
 
-      setMessage(
+      showMessage(
         error instanceof Error
           ? error.message
-          : "Failed to delete design."
+          : "Failed to delete design.",
+        "error"
       );
     } finally {
       setDeletingId(null);
@@ -342,12 +440,12 @@ export default function DesignsPage() {
       <header className="header">
         <div className="brand">
           <div className="brandMark">
-            W3D
+            W
           </div>
 
           <div>
             <p className="eyebrow">
-              WEDDING DESIGN PLATFORM
+              WEDDING PLANNER
             </p>
 
             <h1>
@@ -383,21 +481,21 @@ export default function DesignsPage() {
       </header>
 
       <section className="hero">
-
         <div>
           <span className="heroTag">
-            YOUR WORKSPACE
+            DESIGN LIBRARY
           </span>
 
           <h2>
-            Continue creating
-            beautiful wedding spaces.
+            Your wedding designs,
+            ready whenever you are.
           </h2>
 
           <p>
-            Every design you save from
-            the 3D Designer will appear
-            here automatically.
+            Reopen a saved layout, update
+            its details, create an
+            independent copy, or continue
+            designing in the 3D workspace.
           </p>
         </div>
 
@@ -407,42 +505,58 @@ export default function DesignsPage() {
         >
           + New Design
         </Link>
-
       </section>
 
       <section className="content">
 
         <div className="sectionHeading">
-
           <div>
             <h2>
               Your Designs
             </h2>
 
             <p>
-              Open, edit or manage your
-              saved wedding layouts.
+              Open, duplicate, edit or
+              manage your saved wedding
+              layouts.
             </p>
           </div>
 
-          <div className="designCount">
-            <strong>
-              {designs.length}
-            </strong>
+          <div className="headingActions">
+            <div className="designCount">
+              <strong>
+                {designs.length}
+              </strong>
 
-            <span>
-              {designs.length === 1
-                ? " Design"
-                : " Designs"}
-            </span>
+              <span>
+                {designs.length === 1
+                  ? " Design"
+                  : " Designs"}
+              </span>
+            </div>
+
+            <button
+              className="refreshButton"
+              onClick={loadData}
+              disabled={loading}
+            >
+              ↻ Refresh
+            </button>
           </div>
-
         </div>
 
         {message && (
-          <div className="message">
+          <div
+            className={
+              messageType === "error"
+                ? "message errorMessage"
+                : "message"
+            }
+          >
             <span>
-              ✓
+              {messageType === "error"
+                ? "!"
+                : "✓"}
             </span>
 
             {message}
@@ -474,7 +588,7 @@ export default function DesignsPage() {
             <p>
               Create your first wedding
               layout in the 3D Designer
-              and save it.
+              and save it to see it here.
             </p>
 
             <Link
@@ -492,7 +606,6 @@ export default function DesignsPage() {
 
             {designs.map(
               design => {
-
                 const venue =
                   getVenue(
                     design.venueId
@@ -504,7 +617,6 @@ export default function DesignsPage() {
                   );
 
                 return (
-
                   <article
                     className="designCard"
                     key={design.id}
@@ -521,7 +633,6 @@ export default function DesignsPage() {
                     >
 
                       <div className="previewTop">
-
                         <span className="previewBadge">
                           SAVED DESIGN
                         </span>
@@ -529,11 +640,9 @@ export default function DesignsPage() {
                         <span className="designId">
                           #{design.id}
                         </span>
-
                       </div>
 
                       <div className="previewText">
-
                         <span>
                           WEDDING 3D
                         </span>
@@ -541,7 +650,6 @@ export default function DesignsPage() {
                         <strong>
                           {design.name}
                         </strong>
-
                       </div>
 
                     </div>
@@ -549,7 +657,6 @@ export default function DesignsPage() {
                     <div className="designContent">
 
                       <div className="designTitleRow">
-
                         <div>
                           <h3>
                             {design.name}
@@ -557,16 +664,8 @@ export default function DesignsPage() {
 
                           <p>
                             Last updated{" "}
-
-                            {new Date(
+                            {formatDate(
                               design.updatedAt
-                            ).toLocaleDateString(
-                              undefined,
-                              {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                              }
                             )}
                           </p>
                         </div>
@@ -578,17 +677,16 @@ export default function DesignsPage() {
                               design
                             )
                           }
-                          title="Edit design"
+                          title="Edit design details"
+                          aria-label="Edit design details"
                         >
                           ✎
                         </button>
-
                       </div>
 
                       <div className="infoGrid">
 
                         <div className="infoBox">
-
                           <span className="infoLabel">
                             VENUE
                           </span>
@@ -604,17 +702,14 @@ export default function DesignsPage() {
                               {venue.location}
                             </small>
                           )}
-
                         </div>
 
                         <div className="infoBox">
-
                           <span className="infoLabel">
                             THEME
                           </span>
 
                           <div className="themeInfo">
-
                             <span
                               className="themeDot"
                               style={{
@@ -630,9 +725,7 @@ export default function DesignsPage() {
                                 ? theme.name
                                 : "No theme"}
                             </strong>
-
                           </div>
-
                         </div>
 
                       </div>
@@ -641,13 +734,13 @@ export default function DesignsPage() {
 
                         <Link
                           href={`/?venueId=${design.venueId}&designId=${design.id}`}
-                          className="openButton"
+                          className="actionButton primaryButton"
                         >
                           Open & Edit
                         </Link>
 
                         <button
-                          className="editButton"
+                          className="actionButton secondaryButton"
                           onClick={() =>
                             openEditModal(
                               design
@@ -655,6 +748,24 @@ export default function DesignsPage() {
                           }
                         >
                           Edit Details
+                        </button>
+
+                        <button
+                          className="actionButton duplicateButton"
+                          onClick={() =>
+                            duplicateDesign(
+                              design
+                            )
+                          }
+                          disabled={
+                            duplicatingId ===
+                            design.id
+                          }
+                        >
+                          {duplicatingId ===
+                          design.id
+                            ? "Duplicating..."
+                            : "Duplicate"}
                         </button>
 
                       </div>
@@ -680,7 +791,6 @@ export default function DesignsPage() {
                     </div>
 
                   </article>
-
                 );
               }
             )}
@@ -688,7 +798,6 @@ export default function DesignsPage() {
           </div>
 
         )}
-
       </section>
 
       {editingDesign && (
@@ -708,7 +817,6 @@ export default function DesignsPage() {
             <div className="modalHeader">
 
               <div>
-
                 <span className="modalTag">
                   EDIT DESIGN
                 </span>
@@ -716,12 +824,13 @@ export default function DesignsPage() {
                 <h2>
                   Design Details
                 </h2>
-
               </div>
 
               <button
                 className="closeButton"
                 onClick={closeEditModal}
+                disabled={savingEdit}
+                aria-label="Close"
               >
                 ×
               </button>
@@ -741,6 +850,13 @@ export default function DesignsPage() {
                     event.target.value
                   )
                 }
+                onKeyDown={event => {
+                  if (
+                    event.key === "Enter"
+                  ) {
+                    saveEdit();
+                  }
+                }}
                 placeholder="Enter design name"
                 autoFocus
               />
@@ -750,7 +866,6 @@ export default function DesignsPage() {
             <div className="modalDetails">
 
               <div>
-
                 <span>
                   Venue
                 </span>
@@ -761,11 +876,9 @@ export default function DesignsPage() {
                   )?.name ||
                     `Venue #${editingDesign.venueId}`}
                 </strong>
-
               </div>
 
               <div>
-
                 <span>
                   Theme
                 </span>
@@ -776,7 +889,6 @@ export default function DesignsPage() {
                   )?.name ||
                     "No theme selected"}
                 </strong>
-
               </div>
 
             </div>
@@ -831,13 +943,18 @@ export default function DesignsPage() {
             sans-serif;
         }
 
-        .header {
+        .header,
+        .hero,
+        .content {
           max-width: 1400px;
-          margin:
-            0 auto 32px;
+          margin-left: auto;
+          margin-right: auto;
+        }
+
+        .header {
+          margin-bottom: 32px;
           display: flex;
-          justify-content:
-            space-between;
+          justify-content: space-between;
           align-items: center;
           gap: 30px;
         }
@@ -846,6 +963,7 @@ export default function DesignsPage() {
           display: flex;
           align-items: center;
           gap: 14px;
+          flex-shrink: 0;
         }
 
         .brandMark {
@@ -857,6 +975,7 @@ export default function DesignsPage() {
           border-radius: 14px;
           color: white;
           font-weight: 900;
+          font-size: 22px;
           background:
             linear-gradient(
               135deg,
@@ -890,6 +1009,7 @@ export default function DesignsPage() {
         .navigation {
           display: flex;
           flex-wrap: wrap;
+          justify-content: flex-end;
           gap: 8px;
         }
 
@@ -916,15 +1036,12 @@ export default function DesignsPage() {
         }
 
         .hero {
-          max-width: 1400px;
-          margin:
-            0 auto 35px;
+          margin-bottom: 35px;
           padding: 38px;
           border-radius: 22px;
           color: white;
           display: flex;
-          justify-content:
-            space-between;
+          justify-content: space-between;
           align-items: center;
           gap: 30px;
           background:
@@ -955,7 +1072,7 @@ export default function DesignsPage() {
 
         .hero h2 {
           margin: 0;
-          max-width: 650px;
+          max-width: 680px;
           font-size: 32px;
           line-height: 1.2;
         }
@@ -963,13 +1080,13 @@ export default function DesignsPage() {
         .hero p {
           margin:
             14px 0 0;
-          max-width: 620px;
+          max-width: 650px;
           color:
             rgba(
               255,
               255,
               255,
-              0.8
+              0.82
             );
           line-height: 1.6;
         }
@@ -991,11 +1108,13 @@ export default function DesignsPage() {
               0,
               0.15
             );
+          transition:
+            transform 0.2s ease;
         }
 
-        .content {
-          max-width: 1400px;
-          margin: 0 auto;
+        .newDesignButton:hover {
+          transform:
+            translateY(-2px);
         }
 
         .sectionHeading {
@@ -1003,6 +1122,7 @@ export default function DesignsPage() {
           justify-content:
             space-between;
           align-items: center;
+          gap: 20px;
           margin-bottom: 24px;
         }
 
@@ -1017,6 +1137,12 @@ export default function DesignsPage() {
           color: #64748b;
         }
 
+        .headingActions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
         .designCount {
           padding:
             10px 16px;
@@ -1025,11 +1151,35 @@ export default function DesignsPage() {
           border:
             1px solid #e2e8f0;
           color: #64748b;
+          white-space: nowrap;
         }
 
         .designCount strong {
           color: #2563eb;
           margin-right: 4px;
+        }
+
+        .refreshButton {
+          min-height: 42px;
+          padding: 0 15px;
+          color: #475569;
+          background: white;
+          border:
+            1px solid #cbd5e1;
+          border-radius: 9px;
+          font-size: 13px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .refreshButton:hover:not(:disabled) {
+          background: #f8fafc;
+          border-color: #94a3b8;
+        }
+
+        .refreshButton:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
 
         .message {
@@ -1045,6 +1195,30 @@ export default function DesignsPage() {
             1px solid #bbf7d0;
           border-radius: 12px;
           font-weight: 600;
+        }
+
+        .message span {
+          width: 22px;
+          height: 22px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          border-radius: 50%;
+          color: white;
+          background: #16a34a;
+          font-size: 12px;
+          font-weight: 900;
+        }
+
+        .errorMessage {
+          color: #991b1b;
+          background: #fef2f2;
+          border-color: #fecaca;
+        }
+
+        .errorMessage span {
+          background: #dc2626;
         }
 
         .designGrid {
@@ -1174,6 +1348,9 @@ export default function DesignsPage() {
         .previewText strong {
           font-size: 23px;
           line-height: 1.2;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         .designContent {
@@ -1193,6 +1370,7 @@ export default function DesignsPage() {
         .designTitleRow h3 {
           margin: 0;
           font-size: 21px;
+          color: #172033;
         }
 
         .designTitleRow p {
@@ -1203,20 +1381,25 @@ export default function DesignsPage() {
         }
 
         .editIconButton {
-          width: 36px;
-          height: 36px;
-          border: none;
-          border-radius: 9px;
-          background: #f1f5f9;
+          width: 38px;
+          height: 38px;
+          flex-shrink: 0;
+          border:
+            1px solid #e2e8f0;
+          border-radius: 10px;
+          background: #f8fafc;
           color: #475569;
           cursor: pointer;
           font-size: 17px;
           font-weight: 800;
+          transition:
+            all 0.2s ease;
         }
 
         .editIconButton:hover {
           color: white;
           background: #2563eb;
+          border-color: #2563eb;
         }
 
         .infoGrid {
@@ -1231,6 +1414,8 @@ export default function DesignsPage() {
           min-width: 0;
           padding: 13px;
           background: #f8fafc;
+          border:
+            1px solid #f1f5f9;
           border-radius: 11px;
         }
 
@@ -1265,6 +1450,7 @@ export default function DesignsPage() {
           display: flex;
           align-items: center;
           gap: 7px;
+          min-width: 0;
         }
 
         .themeDot {
@@ -1277,63 +1463,89 @@ export default function DesignsPage() {
         .cardActions {
           display: grid;
           grid-template-columns:
-            1.2fr 1fr;
-          gap: 10px;
+            repeat(3, 1fr);
+          gap: 9px;
         }
 
-        .openButton,
-        .editButton {
+        .actionButton {
           min-height: 44px;
+          padding: 8px 10px;
           display: flex;
           align-items: center;
           justify-content: center;
+          text-align: center;
           text-decoration: none;
           border-radius: 9px;
-          font-size: 14px;
+          font-size: 12px;
           font-weight: 800;
           cursor: pointer;
+          transition:
+            all 0.2s ease;
         }
 
-        .openButton {
+        .primaryButton {
           color: white;
           background: #2563eb;
           border:
             1px solid #2563eb;
         }
 
-        .openButton:hover {
+        .primaryButton:hover {
           background: #1d4ed8;
+          border-color: #1d4ed8;
         }
 
-        .editButton {
+        .secondaryButton {
           color: #334155;
           background: white;
           border:
             1px solid #cbd5e1;
         }
 
-        .editButton:hover {
-          background: #f8fafc;
+        .secondaryButton:hover {
+          color: #1d4ed8;
+          background: #eff6ff;
+          border-color: #93c5fd;
+        }
+
+        .duplicateButton {
+          color: #5b21b6;
+          background: #f5f3ff;
+          border:
+            1px solid #c4b5fd;
+        }
+
+        .duplicateButton:hover:not(:disabled) {
+          color: white;
+          background: #7c3aed;
+          border-color: #7c3aed;
+        }
+
+        .duplicateButton:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
 
         .deleteButton {
           width: 100%;
+          min-height: 42px;
           margin-top: 10px;
           padding: 10px;
           border:
-            1px solid transparent;
-          background: transparent;
+            1px solid #fecaca;
+          background: #fff;
           color: #dc2626;
-          border-radius: 8px;
-          font-weight: 700;
+          border-radius: 9px;
+          font-weight: 800;
           cursor: pointer;
+          transition:
+            all 0.2s ease;
         }
 
-        .deleteButton:hover:not(
-          :disabled
-        ) {
-          background: #fef2f2;
-          border-color: #fecaca;
+        .deleteButton:hover:not(:disabled) {
+          color: white;
+          background: #dc2626;
+          border-color: #dc2626;
         }
 
         .deleteButton:disabled {
@@ -1478,12 +1690,18 @@ export default function DesignsPage() {
         .closeButton {
           width: 36px;
           height: 36px;
-          border: none;
+          border:
+            1px solid #e2e8f0;
           border-radius: 9px;
-          background: #f1f5f9;
+          background: #f8fafc;
           color: #475569;
           cursor: pointer;
           font-size: 25px;
+        }
+
+        .closeButton:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
 
         .formGroup label {
@@ -1553,6 +1771,7 @@ export default function DesignsPage() {
 
         .cancelButton,
         .saveEditButton {
+          min-height: 44px;
           padding:
             11px 17px;
           border-radius: 9px;
@@ -1574,6 +1793,10 @@ export default function DesignsPage() {
             1px solid #2563eb;
         }
 
+        .saveEditButton:hover:not(:disabled) {
+          background: #1d4ed8;
+        }
+
         .saveEditButton:disabled,
         .cancelButton:disabled {
           opacity: 0.6;
@@ -1581,7 +1804,7 @@ export default function DesignsPage() {
         }
 
         @media (
-          max-width: 900px
+          max-width: 1000px
         ) {
           .header,
           .hero {
@@ -1589,42 +1812,83 @@ export default function DesignsPage() {
             align-items:
               flex-start;
           }
+
+          .navigation {
+            justify-content: flex-start;
+          }
         }
 
         @media (
-          max-width: 600px
+          max-width: 700px
         ) {
           .page {
-            padding: 15px;
+            padding: 16px;
           }
 
           .hero {
-            padding: 25px;
+            padding: 28px;
           }
 
           .hero h2 {
-            font-size: 26px;
-          }
-
-          .navigation {
-            width: 100%;
-          }
-
-          .navigation a {
-            flex: 1;
-            text-align: center;
-          }
-
-          .infoGrid,
-          .modalDetails,
-          .cardActions {
-            grid-template-columns: 1fr;
+            font-size: 27px;
           }
 
           .sectionHeading {
             align-items:
               flex-start;
             flex-direction: column;
+          }
+
+          .headingActions {
+            width: 100%;
+            justify-content:
+              space-between;
+          }
+
+          .cardActions {
+            grid-template-columns:
+              1fr;
+          }
+        }
+
+        @media (
+          max-width: 520px
+        ) {
+          .navigation {
+            width: 100%;
+            display: grid;
+            grid-template-columns:
+              repeat(2, 1fr);
+          }
+
+          .navigation a {
+            text-align: center;
+          }
+
+          .infoGrid,
+          .modalDetails {
+            grid-template-columns:
+              1fr;
+          }
+
+          .hero {
+            padding: 24px;
+          }
+
+          .newDesignButton {
+            width: 100%;
+            text-align: center;
+          }
+
+          .headingActions {
+            align-items:
+              stretch;
+            flex-direction: column;
+          }
+
+          .designCount,
+          .refreshButton {
+            text-align: center;
           }
         }
 
