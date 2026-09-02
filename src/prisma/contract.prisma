@@ -34,3 +34,35 @@ model InventoryItem {
   createdAt         TimestamptzString @default(now())
   updatedAt         temporal.updatedAtString()
 }
+
+model ClientRequirement {
+  id           Int      @id @default(autoincrement())
+
+  budget       Float
+  createdAt    TimestamptzString @default(now())
+
+  decoration   String?
+  eventDate    TimestamptzString
+  eventType    String
+  guests       Int
+  location     String
+  requirements String?
+  seating      String?
+
+  updatedAt    temporal.updatedAtString()
+}
+
+model Theme {
+  id              Int      @id @default(autoincrement())
+
+  name            String
+  description     String?
+
+  primaryColor    String
+  secondaryColor  String
+
+  decorationStyle String
+
+  createdAt       TimestamptzString @default(now())
+  updatedAt       temporal.updatedAtString()
+}
