@@ -85,6 +85,16 @@ type SavedScene = {
   items: FurnitureItem[];
 };
 
+type Theme = {
+  id: number;
+  name: string;
+  description: string | null;
+  primaryColor: string | null;
+  secondaryColor: string | null;
+  decorationStyle: string | null;
+  sceneSettings: string | null;
+};
+
 /* =========================================================
    REAL-LIFE DEFAULT DIMENSIONS
 ========================================================= */
@@ -927,8 +937,12 @@ function Furniture2D({
 
 function Floor({
   onClear,
+  primaryColor = "#2563eb",
+  secondaryColor = "#f8fafc",
 }: {
   onClear: () => void;
+  primaryColor?: string;
+  secondaryColor?: string;
 }) {
   return (
     <>
@@ -954,7 +968,7 @@ function Floor({
         />
 
         <meshStandardMaterial
-          color="#ffffff"
+          color={secondaryColor}
           side={
             THREE.DoubleSide
           }
@@ -972,10 +986,10 @@ function Floor({
         ]}
         cellSize={0.5}
         cellThickness={0.7}
-        cellColor="#d1d5db"
+        cellColor={secondaryColor}
         sectionSize={1}
         sectionThickness={1.2}
-        sectionColor="#9ca3af"
+        sectionColor={primaryColor}
         fadeDistance={20}
         fadeStrength={0}
         infiniteGrid={false}
@@ -998,7 +1012,7 @@ function Floor({
           [-6, 0.04, 6],
           [-6, 0.04, -6],
         ]}
-        color="#374151"
+        color={primaryColor}
         lineWidth={3}
       />
 
@@ -1161,17 +1175,23 @@ function TopBar({
   saveScene,
   viewMode,
   setViewMode,
+  selectedTheme,
+  onSwitchTheme,
 }: {
   venue: Venue | null;
   saving: boolean;
   saveScene: () => void;
   viewMode: "2D" | "3D";
   setViewMode: (mode: "2D" | "3D") => void;
+  selectedTheme: Theme | null;
+  onSwitchTheme: () => void;
 }) {
+  const primaryColor = selectedTheme?.primaryColor || "#2563eb";
+
   return (
     <header className="topbar">
       <a href="/" className="brand" aria-label="Wedding Planner home">
-        <div className="brand-icon">W</div>
+        <div className="brand-icon" style={{ background: primaryColor }}>W</div>
         <div>
           <div className="brand-title">Wedding Planner</div>
           <div className="brand-subtitle">3D Venue Designer</div>
@@ -1192,28 +1212,36 @@ function TopBar({
       </div>
 
       <div className="top-actions">
+        <button
+          type="button"
+          onClick={onSwitchTheme}
+          style={{
+            border: "none",
+            borderRadius: "10px",
+            padding: "9px 12px",
+            background: selectedTheme ? primaryColor : "#eef2ff",
+            color: selectedTheme ? "#ffffff" : "#334155",
+            fontWeight: 700,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+          title="Choose or change the wedding theme"
+        >
+          ✨ {selectedTheme?.name || "Choose Theme"}
+        </button>
+
         <span className="saved-status">
           <span className="status-dot">●</span>{" "}
-          {saving ? "Saving..." : "Saved"}
+          {saving ? "Saving..." : "Ready"}
         </span>
+
         <button type="button" className="save-button" onClick={saveScene} disabled={saving}>
-          {saving ? "Saving..." : "💾 Save"}
+          {saving ? "Saving..." : "💾 Save Design"}
         </button>
+
         <div className="view-toggle">
-          <button
-            type="button"
-            className={viewMode === "2D" ? "view-active" : ""}
-            onClick={() => setViewMode("2D")}
-          >
-            2D
-          </button>
-          <button
-            type="button"
-            className={viewMode === "3D" ? "view-active" : ""}
-            onClick={() => setViewMode("3D")}
-          >
-            3D
-          </button>
+          <button type="button" className={viewMode === "2D" ? "view-active" : ""} onClick={() => setViewMode("2D")}>2D</button>
+          <button type="button" className={viewMode === "3D" ? "view-active" : ""} onClick={() => setViewMode("3D")}>3D</button>
         </div>
       </div>
     </header>
@@ -1973,6 +2001,50 @@ export default function Home() {
     inventoryLoading,
     setInventoryLoading,
   ] = useState(true);
+
+  /* =======================================================
+     THEMES
+  ======================================================= */
+
+  const [themes, setThemes] = useState<Theme[]>([]);
+  const [themesLoading, setThemesLoading] = useState(true);
+  const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
+  const [themeModalOpen, setThemeModalOpen] = useState(false);
+  const [currentDesignId, setCurrentDesignId] = useState<number | null>(null);
+  const [currentDesignName, setCurrentDesignName] = useState("");
+  const [selectedThemeId, setSelectedThemeId] = useState<number | null>(null);
+  /* =======================================================
+     LOAD THEMES
+  ======================================================= */
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadThemes() {
+      try {
+        setThemesLoading(true);
+        const response = await fetch("/api/themes", { cache: "no-store" });
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data?.error || "Failed to load themes");
+        }
+
+        if (!cancelled) {
+          setThemes(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        console.error("Failed to load themes:", err);
+        if (!cancelled) setThemes([]);
+      } finally {
+        if (!cancelled) setThemesLoading(false);
+      }
+    }
+
+    loadThemes();
+    return () => { cancelled = true; };
+  }, []);
+
   /* =======================================================
    LOAD INVENTORY
 ======================================================= */
@@ -2104,454 +2176,373 @@ useEffect(() => {
     );
 
   /* =======================================================
-     LOAD VENUE
+     LOAD EDITOR
   ======================================================= */
 
   useEffect(() => {
-    const params =
-      new URLSearchParams(
-        window.location.search
-      );
+    let cancelled = false;
 
-    const idParam =
-      params.get(
-        "venueId"
-      );
-
-    /*
-       If no venueId exists,
-       we still allow the editor
-       to work using local state.
-    */
-
-    if (!idParam) {
-      setLoading(false);
-      return;
+    function toNumber(value: unknown): number | null {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
     }
 
-    const id =
-      Number(idParam);
+    function normalizeDesignPayload(payload: unknown): any[] {
+      if (Array.isArray(payload)) {
+        return payload;
+      }
 
-    async function loadVenue() {
+      if (!payload || typeof payload !== "object") {
+        return [];
+      }
+
+      const record = payload as Record<string, unknown>;
+
+      const candidates = [
+        record.designs,
+        record.savedDesigns,
+        record.data,
+        record.items,
+        record.results,
+      ];
+
+      for (const candidate of candidates) {
+        if (Array.isArray(candidate)) {
+          return candidate;
+        }
+      }
+
+      return [];
+    }
+
+    async function readJson(response: Response) {
+      const text = await response.text();
+
+      if (!text) {
+        return null;
+      }
+
       try {
-        const response =
-          await fetch(
-            `/api/venues?id=${id}`
-          );
-
-        if (!response.ok) {
-          throw new Error(
-            "Failed to load venue"
-          );
-        }
-
-        const data =
-          await response.json();
-
-        const loadedVenue =
-          Array.isArray(data)
-            ? data.find(
-                (
-                  item: Venue
-                ) =>
-                  item.id ===
-                  id
-              ) ||
-              data[0]
-            : data;
-
-        setVenue(
-          loadedVenue ||
-            null
-        );
-
-        /*
-           Restore previously saved
-           furniture layout.
-        */
-
-        if (
-          loadedVenue?.layoutData
-        ) {
-          try {
-            const saved =
-              JSON.parse(
-                loadedVenue.layoutData
-              );
-
-            if (
-              Array.isArray(
-                saved.items
-              )
-            ) {
-              setItems(
-                saved.items
-              );
-
-              if (
-                saved.items
-                  .length >
-                0
-              ) {
-                setSelectedId(
-                  saved.items[0].id
-                );
-              }
-            }
-          } catch {
-            console.log(
-              "No valid saved layout."
-            );
-          }
-        }
-      } catch (err) {
-        console.error(err);
-
-        setError(
-          "Unable to load venue."
-        );
-      } finally {
-        setLoading(
-          false
-        );
+        return JSON.parse(text);
+      } catch {
+        return null;
       }
     }
 
-    loadVenue();
-  }, []);
+    async function loadEditor() {
+      try {
+        setLoading(true);
+        setError("");
 
-/* =======================================================
-   LOAD EDITOR
-======================================================= */
+        const params = new URLSearchParams(
+          window.location.search
+        );
 
-useEffect(() => {
-  const params =
-    new URLSearchParams(
-      window.location.search
-    );
+        const venueIdParam = params.get("venueId");
+        const designIdParam = params.get("designId");
 
-  const venueIdParam =
-    params.get(
-      "venueId"
-    );
+        let loadedVenue: Venue | null = null;
 
-  const designIdParam =
-    params.get(
-      "designId"
-    );
+        /* =====================================================
+           LOAD SAVED DESIGN
 
-  async function loadEditor() {
-    try {
-      setLoading(true);
+           First use the dedicated GET-by-id endpoint.
+           If that endpoint cannot find it, fall back to the
+           normal list endpoint and match the ID locally.
+        ===================================================== */
 
-      setError("");
+        if (designIdParam) {
+          const designId = toNumber(designIdParam);
 
-      let loadedVenue:
-        | Venue
-        | null =
-        null;
+          if (designId === null || designId <= 0) {
+            throw new Error("Invalid saved design ID.");
+          }
 
-      /*
-       * ============================================
-       * LOAD VENUE FROM URL
-       * ============================================
-       */
+          let design: any = null;
 
-      if (venueIdParam) {
-        const venueId =
-          Number(
-            venueIdParam
-          );
-
-        if (
-          Number.isInteger(
-            venueId
-          ) &&
-          venueId > 0
-        ) {
-          const response =
-            await fetch(
-              `/api/venues?id=${venueId}`
+          /* Attempt 1: dedicated GET-by-id endpoint. */
+          try {
+            const directResponse = await fetch(
+              `/api/designs?id=${encodeURIComponent(String(designId))}&_=${Date.now()}`,
+              {
+                cache: "no-store",
+              }
             );
 
-          if (!response.ok) {
-            throw new Error(
-              "Failed to load venue"
+            const directPayload = await readJson(directResponse);
+
+            if (directResponse.ok && directPayload?.id != null) {
+              design = directPayload;
+            }
+          } catch (directError) {
+            console.error(
+              "Direct saved-design request failed:",
+              directError
             );
           }
 
-          const data =
-            await response.json();
-
-          loadedVenue =
-            Array.isArray(data)
-              ? data.find(
-                  (
-                    item: Venue
-                  ) =>
-                    item.id ===
-                    venueId
-                ) ||
-                null
-              : data;
-
-          if (loadedVenue) {
-            setVenue(
-              loadedVenue
+          /* Attempt 2: fetch all designs and find the ID locally. */
+          if (!design) {
+            const listResponse = await fetch(
+              `/api/designs?_=${Date.now()}`,
+              {
+                cache: "no-store",
+              }
             );
 
-            /*
-             * Keep localStorage updated.
-             */
+            const listPayload = await readJson(listResponse);
+
+            if (!listResponse.ok) {
+              throw new Error(
+                listPayload?.error ||
+                  listPayload?.details ||
+                  `Failed to load saved designs (status ${listResponse.status}).`
+              );
+            }
+
+            const designs = normalizeDesignPayload(listPayload);
+
+            design = designs.find(
+              item => toNumber(item?.id) === designId
+            ) || null;
+          }
+
+          if (!design) {
+            throw new Error(
+              `Saved design #${designId} could not be loaded.`
+            );
+          }
+
+          if (cancelled) {
+            return;
+          }
+
+          setCurrentDesignId(
+            toNumber(design.id)
+          );
+
+          setCurrentDesignName(
+            typeof design.name === "string" && design.name.trim()
+              ? design.name
+              : "Saved Design"
+          );
+
+          const savedThemeId =
+            design.themeId === null ||
+            design.themeId === undefined ||
+            design.themeId === ""
+              ? null
+              : toNumber(design.themeId);
+
+          setSelectedThemeId(
+            savedThemeId
+          );
+
+          /* ===================================================
+             LOAD THE VENUE BELONGING TO THE SAVED DESIGN
+          =================================================== */
+
+          const savedVenueId = toNumber(
+            design.venueId
+          );
+
+          if (savedVenueId !== null) {
+            const venueResponse = await fetch(
+              `/api/venues?id=${encodeURIComponent(String(savedVenueId))}&_=${Date.now()}`,
+              {
+                cache: "no-store",
+              }
+            );
+
+            const venuePayload = await readJson(
+              venueResponse
+            );
+
+            if (!venueResponse.ok) {
+              throw new Error(
+                venuePayload?.error ||
+                  venuePayload?.details ||
+                  `Failed to load venue #${savedVenueId}.`
+              );
+            }
+
+            loadedVenue = Array.isArray(venuePayload)
+              ? venuePayload.find(
+                  (item: Venue) =>
+                    Number(item.id) === savedVenueId
+                ) || null
+              : venuePayload;
+
+            if (!loadedVenue) {
+              throw new Error(
+                `Venue #${savedVenueId} could not be loaded.`
+              );
+            }
+
+            setVenue(loadedVenue);
+
             localStorage.setItem(
               "selectedVenue",
-              JSON.stringify(
-                loadedVenue
-              )
+              JSON.stringify(loadedVenue)
             );
 
             localStorage.setItem(
               "selectedVenueId",
-              String(
-                loadedVenue.id
-              )
-            );
-          }
-        }
-      }
-
-      /*
-       * ============================================
-       * FALLBACK: LOAD VENUE FROM LOCAL STORAGE
-       * ============================================
-       *
-       * This supports previously selected venues
-       * and protects us if the URL has no venueId.
-       */
-
-      if (!loadedVenue) {
-        const storedVenue =
-          localStorage.getItem(
-            "selectedVenue"
-          );
-
-        if (storedVenue) {
-          try {
-            const parsedVenue =
-              JSON.parse(
-                storedVenue
-              ) as Venue;
-
-            if (
-              parsedVenue &&
-              typeof parsedVenue.id ===
-                "number"
-            ) {
-              loadedVenue =
-                parsedVenue;
-
-              setVenue(
-                parsedVenue
-              );
-            }
-          } catch {
-            console.error(
-              "Unable to read selected venue."
-            );
-
-            localStorage.removeItem(
-              "selectedVenue"
-            );
-
-            localStorage.removeItem(
-              "selectedVenueId"
-            );
-          }
-        }
-      }
-
-      /*
-       * ============================================
-       * LOAD SAVED DESIGN
-       * ============================================
-       */
-
-      if (designIdParam) {
-        const designId =
-          Number(
-            designIdParam
-          );
-
-        if (
-          Number.isInteger(
-            designId
-          ) &&
-          designId > 0
-        ) {
-          const response =
-            await fetch(
-              `/api/designs?id=${designId}`
-            );
-
-          if (!response.ok) {
-            throw new Error(
-              "Failed to load saved design"
+              String(loadedVenue.id)
             );
           }
 
-          const design =
-            await response.json();
+          /* ===================================================
+             RESTORE THE SAVED FURNITURE LAYOUT
+          =================================================== */
 
-          /*
-           * If the design has a venue
-           * but we have not loaded one yet,
-           * load that venue automatically.
-           */
-
-          if (
-            !loadedVenue &&
-            design.venueId
-          ) {
-            const venueResponse =
-              await fetch(
-                `/api/venues?id=${design.venueId}`
-              );
-
-            if (
-              venueResponse.ok
-            ) {
-              const venueData =
-                await venueResponse.json();
-
-              loadedVenue =
-                Array.isArray(
-                  venueData
-                )
-                  ? venueData.find(
-                      (
-                        item: Venue
-                      ) =>
-                        item.id ===
-                        design.venueId
-                    ) ||
-                    null
-                  : venueData;
-
-              if (
-                loadedVenue
-              ) {
-                setVenue(
-                  loadedVenue
-                );
-
-                localStorage.setItem(
-                  "selectedVenue",
-                  JSON.stringify(
-                    loadedVenue
-                  )
-                );
-
-                localStorage.setItem(
-                  "selectedVenueId",
-                  String(
-                    loadedVenue.id
-                  )
-                );
-              }
-            }
-          }
-
-          /*
-           * Load the saved furniture.
-           */
+          let savedLayout: any = null;
 
           try {
-            const saved =
-              JSON.parse(
-                design.layoutData
-              );
-
-            if (
-              Array.isArray(
-                saved.items
-              )
-            ) {
-              setItems(
-                saved.items
-              );
-
-              setSelectedId(
-                saved.items.length >
-                  0
-                  ? saved.items[0].id
-                  : null
-              );
-            }
+            savedLayout =
+              typeof design.layoutData === "string"
+                ? JSON.parse(design.layoutData)
+                : design.layoutData;
           } catch {
+            savedLayout = null;
+          }
+
+          if (!savedLayout || !Array.isArray(savedLayout.items)) {
             throw new Error(
-              "Saved design contains invalid layout data"
+              "This saved design contains invalid layout data."
+            );
+          }
+
+          if (!cancelled) {
+            setItems(savedLayout.items);
+
+            setSelectedId(
+              savedLayout.items.length > 0
+                ? Number(savedLayout.items[0].id)
+                : null
             );
           }
 
           return;
         }
-      }
 
-      /*
-       * ============================================
-       * LOAD VENUE'S NORMAL LAYOUT
-       * ============================================
-       */
+        /* =====================================================
+           NO SAVED DESIGN: LOAD VENUE FROM URL
+        ===================================================== */
 
-      if (
-        loadedVenue?.layoutData
-      ) {
-        try {
-          const saved =
-            JSON.parse(
-              loadedVenue.layoutData
-            );
+        if (venueIdParam) {
+          const venueId = toNumber(venueIdParam);
 
-          if (
-            Array.isArray(
-              saved.items
-            )
-          ) {
-            setItems(
-              saved.items
-            );
+          if (venueId === null || venueId <= 0) {
+            throw new Error("Invalid venue ID.");
+          }
 
-            setSelectedId(
-              saved.items.length >
-                0
-                ? saved.items[0].id
-                : null
+          const venueResponse = await fetch(
+            `/api/venues?id=${encodeURIComponent(String(venueId))}&_=${Date.now()}`,
+            {
+              cache: "no-store",
+            }
+          );
+
+          const venuePayload = await readJson(
+            venueResponse
+          );
+
+          if (!venueResponse.ok) {
+            throw new Error(
+              venuePayload?.error ||
+                venuePayload?.details ||
+                `Failed to load venue #${venueId}.`
             );
           }
-        } catch {
-          console.log(
-            "No valid saved venue layout."
+
+          loadedVenue = Array.isArray(venuePayload)
+            ? venuePayload.find(
+                (item: Venue) =>
+                  Number(item.id) === venueId
+              ) || null
+            : venuePayload;
+
+          if (!loadedVenue) {
+            throw new Error(
+              `Venue #${venueId} could not be loaded.`
+            );
+          }
+
+          setVenue(loadedVenue);
+
+          localStorage.setItem(
+            "selectedVenue",
+            JSON.stringify(loadedVenue)
+          );
+
+          localStorage.setItem(
+            "selectedVenueId",
+            String(loadedVenue.id)
+          );
+
+          if (loadedVenue.layoutData) {
+            try {
+              const saved =
+                JSON.parse(
+                  loadedVenue.layoutData
+                );
+
+              if (Array.isArray(saved?.items)) {
+                setItems(saved.items);
+                setSelectedId(
+                  saved.items.length > 0
+                    ? Number(saved.items[0].id)
+                    : null
+                );
+              }
+            } catch {
+              console.log(
+                "No valid saved venue layout."
+              );
+            }
+          }
+        }
+      } catch (err) {
+        console.error(
+          "Unable to load editor:",
+          err
+        );
+
+        if (!cancelled) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Unable to load editor."
           );
         }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-    } catch (err) {
-      console.error(
-        "Unable to load editor:",
-        err
-      );
-
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to load editor."
-      );
-    } finally {
-      setLoading(false);
     }
-  }
 
-  loadEditor();
-}, []);
+    loadEditor();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /* =======================================================
+     APPLY SAVED THEME AFTER THEMES LOAD
+  ======================================================= */
+
+  useEffect(() => {
+    if (selectedThemeId === null) {
+      setSelectedTheme(null);
+      return;
+    }
+
+    const foundTheme = themes.find(theme => theme.id === selectedThemeId) || null;
+    setSelectedTheme(foundTheme);
+  }, [themes, selectedThemeId]);
 
   /* =======================================================
      KEYBOARD CONTROLS
@@ -2973,180 +2964,121 @@ useEffect(() => {
      SAVE SCENE
   ======================================================= */
 
- async function saveScene() {
-  const sceneData: SavedScene = {
-    items,
-  };
+  async function saveScene() {
+    const sceneData: SavedScene = { items };
 
-  /*
-    A venue must be selected
-    before saving the design.
-  */
-
-  if (!venue) {
-    alert(
-      "Please select a venue before saving your design."
-    );
-
-    return;
-  }
-
-  try {
-    setSaving(true);
-
-    /*
-      STEP 1:
-      Save the current layout
-      to the selected venue.
-    */
-
-    const venueResponse =
-      await fetch(
-        "/api/venues",
-        {
-          method: "PUT",
-
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-
-          body: JSON.stringify({
-            id: venue.id,
-
-            name: venue.name,
-
-            location:
-              venue.location,
-
-            capacity:
-              venue.capacity,
-
-            type: venue.type,
-
-            price: venue.price,
-
-            availability:
-              venue.availability,
-
-            modelUrl:
-              venue.modelUrl,
-
-            layoutData:
-              JSON.stringify(
-                sceneData
-              ),
-          }),
-        }
-      );
-
-    if (!venueResponse.ok) {
-      throw new Error(
-        "Failed to save venue layout"
-      );
+    if (!venue) {
+      alert("Please select a venue before saving your design.");
+      return;
     }
 
-    /*
-      STEP 2:
-      Create a new record
-      in the Saved Designs table.
-    */
+    try {
+      setSaving(true);
 
-    const designName =
-      window.prompt(
+      const venueResponse = await fetch("/api/venues", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: venue.id,
+          name: venue.name,
+          location: venue.location,
+          capacity: venue.capacity,
+          type: venue.type,
+          price: venue.price,
+          availability: venue.availability,
+          modelUrl: venue.modelUrl,
+          layoutData: JSON.stringify(sceneData),
+        }),
+      });
+
+      if (!venueResponse.ok) {
+        throw new Error("Failed to save venue layout");
+      }
+
+      /* Update an existing saved design in place. */
+      if (currentDesignId !== null) {
+        const updateResponse = await fetch("/api/designs", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: currentDesignId,
+            name:
+              currentDesignName.trim() ||
+              `${venue.name} Design`,
+            venueId: venue.id,
+            themeId: selectedTheme?.id ?? null,
+            layoutData: JSON.stringify(sceneData),
+          }),
+        });
+
+        const updateData = await updateResponse
+          .json()
+          .catch(() => null);
+
+        if (!updateResponse.ok) {
+          throw new Error(
+            updateData?.error ||
+              updateData?.details ||
+              "Failed to update saved design"
+          );
+        }
+
+        setCurrentDesignName(updateData?.name || currentDesignName);
+        setSelectedThemeId(
+          updateData?.themeId === null ||
+          updateData?.themeId === undefined
+            ? selectedTheme?.id ?? null
+            : Number(updateData.themeId)
+        );
+
+        alert(
+          "Design updated successfully with the selected theme!"
+        );
+        return;
+      }
+
+      const designName = window.prompt(
         "Enter a name for your design:",
         `${venue.name} Design`
       );
 
-    /*
-      User pressed Cancel.
-    */
+      if (designName === null) return;
+      if (!designName.trim()) {
+        alert("Please enter a valid design name.");
+        return;
+      }
 
-    if (designName === null) {
-      alert(
-        "Design was not saved to Saved Designs."
+      const designResponse = await fetch("/api/designs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: designName.trim(),
+          venueId: venue.id,
+          themeId: selectedTheme?.id ?? null,
+          layoutData: JSON.stringify(sceneData),
+        }),
+      });
+
+      const designData = await designResponse.json().catch(() => null);
+      if (!designResponse.ok) {
+        throw new Error(designData?.error || "Failed to save design");
+      }
+
+      setCurrentDesignId(Number(designData.id));
+      setCurrentDesignName(designData.name || designName.trim());
+      setSelectedThemeId(
+        designData.themeId ?? selectedTheme?.id ?? null
       );
 
-      return;
+      window.history.replaceState({}, "", `/?venueId=${venue.id}&designId=${designData.id}`);
+      alert("Design saved successfully! You can now find it in Saved Designs.");
+    } catch (err) {
+      console.error("Save design error:", err);
+      alert(err instanceof Error ? err.message : "Could not save design.");
+    } finally {
+      setSaving(false);
     }
-
-    /*
-      Prevent empty names.
-    */
-
-    if (!designName.trim()) {
-      alert(
-        "Please enter a valid design name."
-      );
-
-      return;
-    }
-
-    const designResponse =
-      await fetch(
-        "/api/designs",
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-
-          body: JSON.stringify({
-            name:
-              designName.trim(),
-
-            venueId:
-              venue.id,
-
-            /*
-              We will connect
-              the selected theme
-              here later.
-            */
-
-            themeId: null,
-            layoutData:
-              JSON.stringify(
-                sceneData
-              ),
-          }),
-        }
-      );
-
-    const designData =
-      await designResponse
-        .json()
-        .catch(() => null);
-
-    if (!designResponse.ok) {
-      throw new Error(
-        designData?.error ||
-          "Failed to save design"
-      );
-    }
-
-    alert(
-      "Design saved successfully! You can now find it in Saved Designs."
-    );
-
-  } catch (err) {
-    console.error(
-      "Save design error:",
-      err
-    );
-
-    alert(
-      err instanceof Error
-        ? err.message
-        : "Could not save design."
-    );
-
-  } finally {
-    setSaving(false);
   }
-}
 
   /* =======================================================
      LOADING
@@ -3225,6 +3157,8 @@ useEffect(() => {
           setViewMode={
             setViewMode
           }
+          selectedTheme={selectedTheme}
+          onSwitchTheme={() => setThemeModalOpen(true)}
         />
 
         <div className="editor-body">
@@ -3275,7 +3209,13 @@ useEffect(() => {
               WORKSPACE
           ================================================= */}
 
-          <div className="workspace">
+          <div
+            className="workspace"
+            style={{
+              background: selectedTheme?.secondaryColor || undefined,
+              transition: "background 0.3s ease",
+            }}
+          >
 
             <Canvas
               shadows={
@@ -3322,6 +3262,8 @@ useEffect(() => {
               ================================================= */}
 
               <Floor
+                primaryColor={selectedTheme?.primaryColor || "#2563eb"}
+                secondaryColor={selectedTheme?.secondaryColor || "#f8fafc"}
                 onClear={() => {
                   if (
                     !measureMode
@@ -4395,6 +4337,43 @@ useEffect(() => {
           }
         }
       `}</style>
+
+      {themeModalOpen && (
+        <div onClick={() => setThemeModalOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", zIndex: 1000 }}>
+          <div onClick={event => event.stopPropagation()} style={{ width: "min(760px, 100%)", maxHeight: "80vh", overflowY: "auto", background: "#ffffff", borderRadius: "20px", padding: "24px", boxShadow: "0 24px 80px rgba(15, 23, 42, 0.3)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center", marginBottom: "20px" }}>
+              <div>
+                <h2 style={{ margin: 0, color: "#0f172a" }}>Choose Your Wedding Theme</h2>
+                <p style={{ margin: "6px 0 0", color: "#64748b" }}>Switch themes anytime. Save the design to keep your selection.</p>
+              </div>
+              <button type="button" onClick={() => setThemeModalOpen(false)} style={{ border: "none", background: "#f1f5f9", borderRadius: "10px", padding: "8px 12px", cursor: "pointer", fontWeight: 700 }}>✕</button>
+            </div>
+
+            {themesLoading ? (
+              <p style={{ color: "#64748b" }}>Loading themes...</p>
+            ) : themes.length === 0 ? (
+              <p style={{ color: "#64748b" }}>No themes are available yet. Add themes from the Themes page first.</p>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "16px" }}>
+                {themes.map(theme => {
+                  const active = selectedTheme?.id === theme.id;
+                  const primary = theme.primaryColor || "#2563eb";
+                  const secondary = theme.secondaryColor || "#f8fafc";
+                  return (
+                    <button key={theme.id} type="button" onClick={() => { setSelectedTheme(theme); setSelectedThemeId(theme.id); setThemeModalOpen(false); }} style={{ textAlign: "left", border: active ? `3px solid ${primary}` : "1px solid #e2e8f0", borderRadius: "16px", padding: "16px", cursor: "pointer", background: secondary, boxShadow: active ? "0 10px 25px rgba(15, 23, 42, 0.12)" : "none" }}>
+                      <div style={{ width: "100%", height: "8px", borderRadius: "999px", background: primary, marginBottom: "14px" }} />
+                      <div style={{ color: "#0f172a", fontWeight: 800, fontSize: "16px" }}>{theme.name}</div>
+                      {theme.description && <p style={{ color: "#475569", fontSize: "13px", lineHeight: 1.5, margin: "8px 0" }}>{theme.description}</p>}
+                      {theme.decorationStyle && <div style={{ color: primary, fontSize: "12px", fontWeight: 800, marginTop: "10px" }}>✦ {theme.decorationStyle}</div>}
+                      {active && <div style={{ marginTop: "12px", color: primary, fontWeight: 800, fontSize: "13px" }}>✓ Currently Selected</div>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }

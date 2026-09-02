@@ -2,96 +2,71 @@ import { NextResponse } from "next/server";
 import { db } from "@/src/prisma/db";
 
 function cleanString(value: unknown): string {
-  return typeof value === "string"
-    ? value.trim()
-    : "";
+  return typeof value === "string" ? value.trim() : "";
+}
+
+async function getDesignById(id: number) {
+  const designs = await db.orm.public.SavedDesign.all();
+  return designs.find((design) => Number(design.id) === id) ?? null;
+}
+
+async function getVenueById(id: number) {
+  const venues = await db.orm.public.Venue.all();
+  return venues.find((venue) => Number(venue.id) === id) ?? null;
+}
+
+async function getThemeById(id: number) {
+  const themes = await db.orm.public.Theme.all();
+  return themes.find((theme) => Number(theme.id) === id) ?? null;
 }
 
 /* =========================================================
    GET — GET ALL DESIGNS OR ONE DESIGN
 ========================================================= */
-
-export async function GET(
-  request: Request
-) {
+export async function GET(request: Request) {
   try {
-    const { searchParams } =
-      new URL(request.url);
+    const { searchParams } = new URL(request.url);
+    const idParam = searchParams.get("id");
 
-    const idParam =
-      searchParams.get("id");
+    const designs = await db.orm.public.SavedDesign.all();
 
-    /* GET ONE DESIGN */
+    if (!idParam) {
+      return NextResponse.json(designs, { status: 200 });
+    }
 
-    if (idParam) {
-      const id =
-        Number(idParam);
+    const id = Number(idParam);
 
-      if (
-        !Number.isInteger(id) ||
-        id <= 0
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "Valid design ID is required",
-          },
-          {
-            status: 400,
-          }
-        );
-      }
-
-      const design =
-        await db.orm.public.SavedDesign.first({
-          id,
-        });
-
-      if (!design) {
-        return NextResponse.json(
-          {
-            error:
-              "Saved design not found",
-          },
-          {
-            status: 404,
-          }
-        );
-      }
-
+    if (!Number.isInteger(id) || id <= 0) {
       return NextResponse.json(
-        design,
-        {
-          status: 200,
-        }
+        { error: "Valid design ID is required" },
+        { status: 400 }
       );
     }
 
-    /* GET ALL DESIGNS */
-
-    const designs =
-      await db.orm.public.SavedDesign.all();
-
-    return NextResponse.json(
-      designs,
-      {
-        status: 200,
-      }
+    const design = designs.find(
+      (item) => Number(item.id) === id
     );
+
+    if (!design) {
+      return NextResponse.json(
+        { error: "Saved design not found", id },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(design, { status: 200 });
   } catch (error) {
-    console.error(
-      "Saved design GET error:",
-      error
-    );
+    console.error("Saved design GET error:", error);
 
     return NextResponse.json(
       {
-        error:
-          "Failed to fetch saved designs",
+        error: "Failed to fetch saved designs",
+        details:
+          error instanceof Error
+            ? error.message
+            : "Unknown database error",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }
@@ -99,212 +74,108 @@ export async function GET(
 /* =========================================================
    POST — CREATE OR DUPLICATE SAVED DESIGN
 ========================================================= */
-
-export async function POST(
-  request: Request
-) {
+export async function POST(request: Request) {
   try {
-    const body =
-      await request.json();
+    const body = await request.json();
 
-    /* =====================================================
-       DUPLICATE DESIGN
-    ===================================================== */
-
+    /* DUPLICATE */
     if (body.action === "duplicate") {
-      const id =
-        Number(body.id);
+      const id = Number(body.id);
 
-      if (
-        !Number.isInteger(id) ||
-        id <= 0
-      ) {
+      if (!Number.isInteger(id) || id <= 0) {
         return NextResponse.json(
-          {
-            error:
-              "Valid design ID is required",
-          },
-          {
-            status: 400,
-          }
+          { error: "Valid design ID is required" },
+          { status: 400 }
         );
       }
 
-      const existingDesign =
-        await db.orm.public.SavedDesign.first({
-          id,
-        });
+      const existingDesign = await getDesignById(id);
 
       if (!existingDesign) {
         return NextResponse.json(
-          {
-            error:
-              "Saved design not found",
-          },
-          {
-            status: 404,
-          }
+          { error: "Saved design not found" },
+          { status: 404 }
         );
       }
 
-      /*
-        Create a new independent design.
-
-        The venue, theme and layout are copied,
-        but the new design receives its own ID.
-      */
-
-      const duplicateName =
-        `${existingDesign.name} Copy`;
-
       const duplicatedDesign =
         await db.orm.public.SavedDesign.create({
-          name: duplicateName,
-          venueId:
-            existingDesign.venueId,
-          themeId:
-            existingDesign.themeId ?? null,
-          layoutData:
-            existingDesign.layoutData,
+          name: `${existingDesign.name} Copy`,
+          venueId: existingDesign.venueId,
+          themeId: existingDesign.themeId ?? null,
+          layoutData: existingDesign.layoutData,
         });
 
       return NextResponse.json(
         {
-          message:
-            "Design duplicated successfully",
-          design:
-            duplicatedDesign,
+          message: "Design duplicated successfully",
+          design: duplicatedDesign,
         },
-        {
-          status: 201,
-        }
+        { status: 201 }
       );
     }
 
-    /* =====================================================
-       CREATE NEW DESIGN
-    ===================================================== */
-
-    const name =
-      cleanString(body.name);
-
-    const venueId =
-      Number(body.venueId);
-
+    /* CREATE */
+    const name = cleanString(body.name);
+    const venueId = Number(body.venueId);
     const themeId =
       body.themeId === null ||
       body.themeId === undefined ||
       body.themeId === ""
         ? null
         : Number(body.themeId);
-
-    const layoutData =
-      cleanString(
-        body.layoutData
-      );
+    const layoutData = cleanString(body.layoutData);
 
     if (!name) {
       return NextResponse.json(
-        {
-          error:
-            "Design name is required",
-        },
-        {
-          status: 400,
-        }
+        { error: "Design name is required" },
+        { status: 400 }
       );
     }
 
-    if (
-      !Number.isInteger(
-        venueId
-      ) ||
-      venueId <= 0
-    ) {
+    if (!Number.isInteger(venueId) || venueId <= 0) {
       return NextResponse.json(
-        {
-          error:
-            "A valid venue is required",
-        },
-        {
-          status: 400,
-        }
+        { error: "A valid venue is required" },
+        { status: 400 }
       );
     }
 
     if (
       themeId !== null &&
-      (
-        !Number.isInteger(
-          themeId
-        ) ||
-        themeId <= 0
-      )
+      (!Number.isInteger(themeId) || themeId <= 0)
     ) {
       return NextResponse.json(
-        {
-          error:
-            "Theme ID must be valid",
-        },
-        {
-          status: 400,
-        }
+        { error: "Theme ID must be valid" },
+        { status: 400 }
       );
     }
 
     if (!layoutData) {
       return NextResponse.json(
-        {
-          error:
-            "Design layout data is required",
-        },
-        {
-          status: 400,
-        }
+        { error: "Design layout data is required" },
+        { status: 400 }
       );
     }
 
-    /* CHECK VENUE */
-
-    const venue =
-      await db.orm.public.Venue.first({
-        id: venueId,
-      });
+    const venue = await getVenueById(venueId);
 
     if (!venue) {
       return NextResponse.json(
-        {
-          error:
-            "Venue not found",
-        },
-        {
-          status: 404,
-        }
+        { error: "Venue not found" },
+        { status: 404 }
       );
     }
 
-    /* CHECK THEME */
-
     if (themeId !== null) {
-      const theme =
-        await db.orm.public.Theme.first({
-          id: themeId,
-        });
+      const theme = await getThemeById(themeId);
 
       if (!theme) {
         return NextResponse.json(
-          {
-            error:
-              "Theme not found",
-          },
-          {
-            status: 404,
-          }
+          { error: "Theme not found" },
+          { status: 404 }
         );
       }
     }
-
-    /* CREATE DESIGN */
 
     const design =
       await db.orm.public.SavedDesign.create({
@@ -314,26 +185,19 @@ export async function POST(
         layoutData,
       });
 
-    return NextResponse.json(
-      design,
-      {
-        status: 201,
-      }
-    );
+    return NextResponse.json(design, { status: 201 });
   } catch (error) {
-    console.error(
-      "Saved design POST error:",
-      error
-    );
+    console.error("Saved design POST error:", error);
 
     return NextResponse.json(
       {
-        error:
-          "Failed to create saved design",
+        error: "Failed to create saved design",
+        details:
+          error instanceof Error
+            ? error.message
+            : "Unknown database error",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }
@@ -341,81 +205,89 @@ export async function POST(
 /* =========================================================
    PUT — UPDATE SAVED DESIGN
 ========================================================= */
-
-export async function PUT(
-  request: Request
-) {
+export async function PUT(request: Request) {
   try {
-    const body =
-      await request.json();
+    const body = await request.json();
+    const id = Number(body.id);
 
-    const id =
-      Number(body.id);
-
-    if (
-      !Number.isInteger(id) ||
-      id <= 0
-    ) {
+    if (!Number.isInteger(id) || id <= 0) {
       return NextResponse.json(
-        {
-          error:
-            "Valid design ID is required",
-        },
-        {
-          status: 400,
-        }
+        { error: "Valid design ID is required" },
+        { status: 400 }
       );
     }
 
-    const existingDesign =
-      await db.orm.public.SavedDesign.first({
-        id,
-      });
+    const existingDesign = await getDesignById(id);
 
     if (!existingDesign) {
       return NextResponse.json(
-        {
-          error:
-            "Saved design not found",
-        },
-        {
-          status: 404,
-        }
+        { error: "Saved design not found" },
+        { status: 404 }
       );
     }
 
-    const name =
-      cleanString(
-        body.name
-      );
+    const name = cleanString(body.name);
+    const layoutData = cleanString(body.layoutData);
+    const venueId = Number(
+      body.venueId ?? existingDesign.venueId
+    );
 
-    const layoutData =
-      cleanString(
-        body.layoutData
-      );
+    const themeId =
+      body.themeId === null || body.themeId === ""
+        ? null
+        : body.themeId === undefined
+          ? existingDesign.themeId
+          : Number(body.themeId);
 
     if (!name) {
       return NextResponse.json(
-        {
-          error:
-            "Design name is required",
-        },
-        {
-          status: 400,
-        }
+        { error: "Design name is required" },
+        { status: 400 }
       );
     }
 
     if (!layoutData) {
       return NextResponse.json(
-        {
-          error:
-            "Design layout data is required",
-        },
-        {
-          status: 400,
-        }
+        { error: "Design layout data is required" },
+        { status: 400 }
       );
+    }
+
+    if (!Number.isInteger(venueId) || venueId <= 0) {
+      return NextResponse.json(
+        { error: "A valid venue is required" },
+        { status: 400 }
+      );
+    }
+
+    if (
+      themeId !== null &&
+      (!Number.isInteger(themeId) || themeId <= 0)
+    ) {
+      return NextResponse.json(
+        { error: "Theme ID must be valid" },
+        { status: 400 }
+      );
+    }
+
+    const venue = await getVenueById(venueId);
+
+    if (!venue) {
+      return NextResponse.json(
+        { error: "Venue not found" },
+        { status: 404 }
+      );
+    }
+
+    if (themeId !== null) {
+      const theme = await getThemeById(themeId);
+
+      if (!theme) {
+        return NextResponse.json(
+          { error: "Theme not found" },
+          { status: 404 }
+        );
+      }
     }
 
     const updatedDesign =
@@ -423,29 +295,27 @@ export async function PUT(
         .where({ id })
         .update({
           name,
+          venueId,
+          themeId,
           layoutData,
         });
 
     return NextResponse.json(
       updatedDesign,
-      {
-        status: 200,
-      }
+      { status: 200 }
     );
   } catch (error) {
-    console.error(
-      "Saved design PUT error:",
-      error
-    );
+    console.error("Saved design PUT error:", error);
 
     return NextResponse.json(
       {
-        error:
-          "Failed to update saved design",
+        error: "Failed to update saved design",
+        details:
+          error instanceof Error
+            ? error.message
+            : "Unknown database error",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }
@@ -453,46 +323,24 @@ export async function PUT(
 /* =========================================================
    DELETE — DELETE SAVED DESIGN
 ========================================================= */
-
-export async function DELETE(
-  request: Request
-) {
+export async function DELETE(request: Request) {
   try {
-    const body =
-      await request.json();
+    const body = await request.json();
+    const id = Number(body.id);
 
-    const id =
-      Number(body.id);
-
-    if (
-      !Number.isInteger(id) ||
-      id <= 0
-    ) {
+    if (!Number.isInteger(id) || id <= 0) {
       return NextResponse.json(
-        {
-          error:
-            "Valid design ID is required",
-        },
-        {
-          status: 400,
-        }
+        { error: "Valid design ID is required" },
+        { status: 400 }
       );
     }
 
-    const existingDesign =
-      await db.orm.public.SavedDesign.first({
-        id,
-      });
+    const existingDesign = await getDesignById(id);
 
     if (!existingDesign) {
       return NextResponse.json(
-        {
-          error:
-            "Saved design not found",
-        },
-        {
-          status: 404,
-        }
+        { error: "Saved design not found" },
+        { status: 404 }
       );
     }
 
@@ -505,24 +353,20 @@ export async function DELETE(
         message:
           "Saved design deleted successfully",
       },
-      {
-        status: 200,
-      }
+      { status: 200 }
     );
   } catch (error) {
-    console.error(
-      "Saved design DELETE error:",
-      error
-    );
+    console.error("Saved design DELETE error:", error);
 
     return NextResponse.json(
       {
-        error:
-          "Failed to delete saved design",
+        error: "Failed to delete saved design",
+        details:
+          error instanceof Error
+            ? error.message
+            : "Unknown database error",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }
