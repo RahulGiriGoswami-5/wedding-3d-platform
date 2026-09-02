@@ -2973,102 +2973,180 @@ useEffect(() => {
      SAVE SCENE
   ======================================================= */
 
-  async function saveScene() {
-    const sceneData:
-      SavedScene = {
-      items,
-    };
+ async function saveScene() {
+  const sceneData: SavedScene = {
+    items,
+  };
+
+  /*
+    A venue must be selected
+    before saving the design.
+  */
+
+  if (!venue) {
+    alert(
+      "Please select a venue before saving your design."
+    );
+
+    return;
+  }
+
+  try {
+    setSaving(true);
 
     /*
-       If no venue is selected,
-       save locally.
+      STEP 1:
+      Save the current layout
+      to the selected venue.
     */
 
-    if (!venue) {
-      localStorage.setItem(
-        "wedding-design",
-        JSON.stringify(
-          sceneData
-        )
+    const venueResponse =
+      await fetch(
+        "/api/venues",
+        {
+          method: "PUT",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+            id: venue.id,
+
+            name: venue.name,
+
+            location:
+              venue.location,
+
+            capacity:
+              venue.capacity,
+
+            type: venue.type,
+
+            price: venue.price,
+
+            availability:
+              venue.availability,
+
+            modelUrl:
+              venue.modelUrl,
+
+            layoutData:
+              JSON.stringify(
+                sceneData
+              ),
+          }),
+        }
       );
 
+    if (!venueResponse.ok) {
+      throw new Error(
+        "Failed to save venue layout"
+      );
+    }
+
+    /*
+      STEP 2:
+      Create a new record
+      in the Saved Designs table.
+    */
+
+    const designName =
+      window.prompt(
+        "Enter a name for your design:",
+        `${venue.name} Design`
+      );
+
+    /*
+      User pressed Cancel.
+    */
+
+    if (designName === null) {
       alert(
-        "Design saved!"
+        "Design was not saved to Saved Designs."
       );
 
       return;
     }
 
-    try {
-      setSaving(
-        true
-      );
+    /*
+      Prevent empty names.
+    */
 
-      const response =
-        await fetch(
-          "/api/venues",
-          {
-            method: "PUT",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body:
-              JSON.stringify({
-                id: venue.id,
-
-                name:
-                  venue.name,
-
-                location:
-                  venue.location,
-
-                capacity:
-                  venue.capacity,
-
-                type:
-                  venue.type,
-
-                price:
-                  venue.price,
-
-                availability:
-                  venue.availability,
-
-                modelUrl:
-                  venue.modelUrl,
-
-                layoutData:
-                  JSON.stringify(
-                    sceneData
-                  ),
-              }),
-          }
-        );
-
-      if (!response.ok) {
-        throw new Error(
-          "Failed to save"
-        );
-      }
-
+    if (!designName.trim()) {
       alert(
-        "Design saved successfully!"
+        "Please enter a valid design name."
       );
-    } catch (err) {
-      console.error(err);
 
-      alert(
-        "Could not save design."
+      return;
+    }
+
+    const designResponse =
+      await fetch(
+        "/api/designs",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+            name:
+              designName.trim(),
+
+            venueId:
+              venue.id,
+
+            /*
+              We will connect
+              the selected theme
+              here later.
+            */
+
+            themeId: null,
+            layoutData:
+              JSON.stringify(
+                sceneData
+              ),
+          }),
+        }
       );
-    } finally {
-      setSaving(
-        false
+
+    const designData =
+      await designResponse
+        .json()
+        .catch(() => null);
+
+    if (!designResponse.ok) {
+      throw new Error(
+        designData?.error ||
+          "Failed to save design"
       );
     }
+
+    alert(
+      "Design saved successfully! You can now find it in Saved Designs."
+    );
+
+  } catch (err) {
+    console.error(
+      "Save design error:",
+      err
+    );
+
+    alert(
+      err instanceof Error
+        ? err.message
+        : "Could not save design."
+    );
+
+  } finally {
+    setSaving(false);
   }
+}
 
   /* =======================================================
      LOADING
