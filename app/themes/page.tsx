@@ -20,6 +20,45 @@ const emptyForm = {
   decorationStyle: "",
 };
 
+
+type ApiErrorData = {
+  error?: unknown;
+  message?: unknown;
+};
+
+async function readApiData(response: Response): Promise<unknown> {
+  const text = await response.text();
+
+  if (!text) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
+}
+
+function getApiError(
+  data: unknown,
+  fallback: string
+): string {
+  if (data && typeof data === "object") {
+    const apiData = data as ApiErrorData;
+
+    if (typeof apiData.error === "string" && apiData.error.trim()) {
+      return apiData.error;
+    }
+
+    if (typeof apiData.message === "string" && apiData.message.trim()) {
+      return apiData.message;
+    }
+  }
+
+  return fallback;
+}
+
 export default function ThemesPage() {
   const [themes, setThemes] = useState<Theme[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,11 +77,11 @@ export default function ThemesPage() {
         cache: "no-store",
       });
 
-      const data = await response.json();
+      const data = await readApiData(response);
 
       if (!response.ok) {
         throw new Error(
-          data.error || "Failed to load themes"
+          getApiError(data, "Failed to load themes")
         );
       }
 
@@ -90,11 +129,11 @@ export default function ThemesPage() {
         ),
       });
 
-      const data = await response.json();
+      const data = await readApiData(response);
 
       if (!response.ok) {
         throw new Error(
-          data.error || "Failed to save theme"
+          getApiError(data, "Failed to save theme")
         );
       }
 
@@ -162,11 +201,11 @@ export default function ThemesPage() {
         body: JSON.stringify({ id }),
       });
 
-      const data = await response.json();
+      const data = await readApiData(response);
 
       if (!response.ok) {
         throw new Error(
-          data.error || "Failed to delete theme"
+          getApiError(data, "Failed to delete theme")
         );
       }
 
@@ -204,7 +243,7 @@ export default function ThemesPage() {
           <Link href="/">Designer</Link>
           <Link href="/venues">Venues</Link>
           <Link href="/inventory">Inventory</Link>
-          <Link href="/themes">Themes</Link>
+          <Link className="activeNav" href="/themes">Themes</Link>
         </nav>
       </header>
 
@@ -496,9 +535,11 @@ export default function ThemesPage() {
           font-weight: 600;
         }
 
-        .navigation a:hover {
+        .navigation a:hover,
+        .navigation .activeNav {
           border-color: #2563eb;
           color: #2563eb;
+          background: #eff6ff;
         }
 
         .content {

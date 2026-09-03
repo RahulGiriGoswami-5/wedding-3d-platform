@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import "./venues.css";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Venue = {
   id: number;
@@ -12,473 +12,544 @@ type Venue = {
   price: number;
   availability: boolean;
   modelUrl: string | null;
-  layoutData: string | null;
+  layoutData?: string | null;
 };
 
-type VenueForm = {
+type VenueFormState = {
   name: string;
   location: string;
   capacity: string;
   type: string;
   price: string;
   availability: boolean;
-  modelUrl: string;
 };
 
-const emptyForm: VenueForm = {
+const EMPTY_FORM: VenueFormState = {
   name: "",
   location: "",
   capacity: "",
   type: "",
   price: "",
   availability: true,
-  modelUrl: "",
 };
 
+const ACCEPTED_MODEL_TYPES = [".glb", ".fbx", ".obj"];
+const MAX_MODEL_SIZE = 100 * 1024 * 1024;
+
+function formatPrice(price: number) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(price);
+}
+
+function getApiError(data: unknown, fallback: string) {
+  if (data && typeof data === "object" && "error" in data) {
+    const error = (data as { error?: unknown }).error;
+    if (typeof error === "string" && error.trim()) return error;
+  }
+  return fallback;
+}
+
 export default function VenuesPage() {
+  const router = useRouter();
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
   const [showModal, setShowModal] = useState(false);
-  const [editingVenue, setEditingVenue] = useState<Venue | null>(null);
+  const [form, setForm] = useState<VenueFormState>(EMPTY_FORM);
+  const [modelFile, setModelFile] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [pageError, setPageError] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [selectedModelFile, setSelectedModelFile] = useState<File | null>(null);
-  const [form, setForm] = useState<VenueForm>(emptyForm);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadVenues = useCallback(async () => {
+    setLoading(true);
+    setPageError("");
+
     try {
-      setLoading(true);
-      setError("");
-      const response = await fetch("/api/venues");
-      if (!response.ok) throw new Error("Failed to load venues");
-      setVenues(await response.json());
-    } catch (err) {
-      console.error(err);
-      setError("Failed to load venues");
+      const response = await fetch("/api/venues", {
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      });
+
+      // The venue page must never crash merely because the database is empty
+      // or an old/deleted venue record makes the API temporarily unavailable.
+      if (!response.ok) {
+        setVenues([]);
+        setPageError("Could not refresh venues right now. Please try again.");
+        return;
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        setVenues([]);
+        setPageError("The venues service returned an invalid response. Please try again.");
+        return;
+      }
+
+      const data: unknown = await response.json();
+
+      // An empty database is valid. Only arrays are accepted as venue lists.
+      setVenues(Array.isArray(data) ? (data as Venue[]) : []);
+    } catch {
+      // Do not throw or call console.error here. In Next.js development mode,
+      // console errors can trigger the full-screen error overlay. If the API is
+      // temporarily unavailable, keep the page usable and show an empty list.
+      setVenues([]);
+      setPageError("Could not connect to the venues service. Please try again.");
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadVenues();
+    void loadVenues();
   }, [loadVenues]);
 
-  function resetFileInput() {
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  }
+  const venueCountLabel = useMemo(
+    () => `${venues.length} ${venues.length === 1 ? "venue" : "venues"}`,
+    [venues.length]
+  );
 
   function openAddModal() {
-    setEditingVenue(null);
-    setForm(emptyForm);
-    setSelectedModelFile(null);
-    resetFileInput();
-    setShowModal(true);
-  }
-
-  function openEditModal(venue: Venue) {
-    setEditingVenue(venue);
-    setForm({
-      name: venue.name,
-      location: venue.location,
-      capacity: String(venue.capacity),
-      type: venue.type,
-      price: String(venue.price),
-      availability: venue.availability,
-      modelUrl: venue.modelUrl ?? "",
-    });
-    setSelectedModelFile(null);
-    resetFileInput();
+    setForm(EMPTY_FORM);
+    setModelFile(null);
+    setFormError("");
     setShowModal(true);
   }
 
   function closeModal() {
+    if (submitting) return;
     setShowModal(false);
-    setEditingVenue(null);
-    setForm(emptyForm);
-    setSelectedModelFile(null);
-    resetFileInput();
+    setFormError("");
   }
 
-  function handleModelFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null;
+  function updateField<K extends keyof VenueFormState>(
+    key: K,
+    value: VenueFormState[K]
+  ) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function handleFileChange(file: File | null) {
+    setFormError("");
+
     if (!file) {
-      setSelectedModelFile(null);
+      setModelFile(null);
       return;
     }
 
-    if (!file.name.toLowerCase().endsWith(".glb")) {
-      alert("Please select a valid .glb 3D model file.");
-      e.target.value = "";
-      setSelectedModelFile(null);
+    const extension = `.${file.name.split(".").pop()?.toLowerCase() || ""}`;
+
+    if (!ACCEPTED_MODEL_TYPES.includes(extension)) {
+      setModelFile(null);
+      setFormError("Please select a .glb, .fbx or .obj 3D model.");
       return;
     }
 
-    setSelectedModelFile(file);
+    if (file.size > MAX_MODEL_SIZE) {
+      setModelFile(null);
+      setFormError("The 3D model must be smaller than 100 MB.");
+      return;
+    }
+
+    setModelFile(file);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError("");
 
-    if (!form.name.trim()) return alert("Venue name is required");
-    if (!form.location.trim()) return alert("Location is required");
-    if (!form.capacity || Number(form.capacity) <= 0) {
-      return alert("Capacity must be greater than 0");
+    const capacity = Number(form.capacity);
+    const price = Number(form.price);
+
+    if (!Number.isFinite(capacity) || capacity <= 0) {
+      setFormError("Please enter a valid capacity greater than 0.");
+      return;
     }
-    if (!form.type.trim()) return alert("Venue type is required");
-    if (form.price === "" || Number(form.price) < 0) {
-      return alert("Price must be 0 or greater");
+
+    if (!Number.isFinite(price) || price < 0) {
+      setFormError("Please enter a valid price.");
+      return;
     }
 
     try {
-      setSaving(true);
-      setError("");
+      setSubmitting(true);
 
-      const requestData = new FormData();
+      const body = new FormData();
+      body.append("name", form.name.trim());
+      body.append("location", form.location.trim());
+      body.append("capacity", String(capacity));
+      body.append("type", form.type.trim());
+      body.append("price", String(price));
+      body.append("availability", String(form.availability));
 
-      if (editingVenue) {
-        requestData.append("id", String(editingVenue.id));
-      }
-
-      requestData.append("name", form.name.trim());
-      requestData.append("location", form.location.trim());
-      requestData.append("capacity", form.capacity);
-      requestData.append("type", form.type.trim());
-      requestData.append("price", form.price);
-      requestData.append("availability", String(form.availability));
-      requestData.append("modelUrl", form.modelUrl.trim());
-
-      if (selectedModelFile) {
-        requestData.append("model", selectedModelFile);
+      if (modelFile) {
+        body.append("model", modelFile);
       }
 
       const response = await fetch("/api/venues", {
-        method: editingVenue ? "PUT" : "POST",
-        body: requestData,
+        method: "POST",
+        body,
       });
 
+      const data = await response.json().catch(() => null);
+
       if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        throw new Error(data?.error ?? "Failed to save venue");
+        throw new Error(getApiError(data, "Failed to create venue."));
       }
 
-      closeModal();
+      setShowModal(false);
+      setForm(EMPTY_FORM);
+      setModelFile(null);
       await loadVenues();
-    } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : "Failed to save venue");
+    } catch (error) {
+      console.error("Failed to create venue:", error);
+      setFormError(
+        error instanceof Error ? error.message : "Failed to create venue."
+      );
     } finally {
-      setSaving(false);
+      setSubmitting(false);
     }
   }
 
-  async function handleDelete(id: number) {
+  async function deleteVenue(id: number, name: string) {
+    const confirmed = window.confirm(
+      `Delete "${name}"? This cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
     try {
       setDeletingId(id);
-      setError("");
-
       const response = await fetch("/api/venues", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
       });
 
+      const data = await response.json().catch(() => null);
+
       if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        throw new Error(data?.error ?? "Failed to delete venue");
+        throw new Error(getApiError(data, "Failed to delete venue."));
       }
 
-      await loadVenues();
-    } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : "Failed to delete venue");
+      setVenues((current) => current.filter((venue) => venue.id !== id));
+    } catch (error) {
+      console.error("Failed to delete venue:", error);
+      window.alert(
+        error instanceof Error ? error.message : "Failed to delete venue."
+      );
     } finally {
       setDeletingId(null);
     }
   }
 
-  function openEditor(id: number) {
-    window.location.href = `/?venueId=${id}`;
+  function openEditor(venue: Venue) {
+    router.push(`/?venueId=${encodeURIComponent(String(venue.id))}`);
   }
 
   return (
     <main className="venues-page">
-      <header className="venues-header">
-        <div className="header-text">
+      <section className="venues-header">
+        <div>
+          <span className="eyebrow">VENUE MANAGEMENT</span>
           <h1>Venues</h1>
-          <p>Manage your wedding & event venues</p>
+          <p>Manage your wedding and event venues, 3D models and layouts.</p>
         </div>
 
-        <button className="add-venue-btn" onClick={openAddModal}>
-          + Add Venue
+        <button className="primary-button" onClick={openAddModal} type="button">
+          <span>＋</span> Add Venue
         </button>
-      </header>
+      </section>
 
-      {error && <div className="error-banner">{error}</div>}
+      <div className="summary-row">
+        <span>{venueCountLabel}</span>
+        <button
+          type="button"
+          className="refresh-button"
+          onClick={() => void loadVenues()}
+          disabled={loading}
+        >
+          ↻ Refresh
+        </button>
+      </div>
+
+      {pageError && (
+        <div className="page-error" role="alert">
+          {pageError}
+        </div>
+      )}
 
       {loading ? (
-        <div className="loading-state">
+        <div className="state-card">
           <div className="spinner" />
-          <p>Loading venues...</p>
+          <h2>Loading venues...</h2>
+          <p>Please wait while your venue list is loaded.</p>
         </div>
       ) : venues.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-icon">🏛️</div>
+        <div className="state-card empty-card">
+          <div className="empty-icon">⌑</div>
           <h2>No venues yet</h2>
-          <p>Add your first wedding venue to get started.</p>
-          <button onClick={openAddModal}>+ Add Your First Venue</button>
+          <p>Create your first venue and optionally connect a GLB, FBX or OBJ model.</p>
+          <button className="primary-button" type="button" onClick={openAddModal}>
+            ＋ Add Your First Venue
+          </button>
         </div>
       ) : (
-        <div className="venue-grid">
+        <section className="venues-grid">
           {venues.map((venue) => (
             <article className="venue-card" key={venue.id}>
-              <div className="venue-card-header">
-                <span className="venue-type-badge">{venue.type}</span>
-                <span className={`status-badge ${venue.availability ? "available" : "unavailable"}`}>
-                  {venue.availability ? "✓ Available" : "✗ Unavailable"}
+              <div className="card-topline">
+                <span className="venue-type">{venue.type}</span>
+                <span className={venue.availability ? "status available" : "status unavailable"}>
+                  {venue.availability ? "✓ Available" : "Unavailable"}
                 </span>
               </div>
 
-              <h2 className="venue-name">{venue.name}</h2>
+              <h2>{venue.name}</h2>
 
-              <div className="venue-info">
-                <div className="info-item">
-                  <span className="info-label">📍 Location</span>
-                  <span className="info-value">{venue.location}</span>
+              <div className="venue-details">
+                <div><span>⌖</span><p>Location</p><strong>{venue.location}</strong></div>
+                <div><span>♟</span><p>Capacity</p><strong>{venue.capacity} guests</strong></div>
+                <div><span>₹</span><p>Price</p><strong>{formatPrice(venue.price)}</strong></div>
+              </div>
+
+              <div className="model-status">
+                <div>
+                  <span className={venue.modelUrl ? "model-dot connected" : "model-dot"} />
+                  <span>{venue.modelUrl ? "3D Model Connected" : "No 3D Model"}</span>
                 </div>
-                <div className="info-item">
-                  <span className="info-label">👥 Capacity</span>
-                  <span className="info-value">{venue.capacity} guests</span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">💰 Price</span>
-                  <span className="info-value">₹{venue.price.toLocaleString("en-IN")}</span>
+                <div className={venue.layoutData ? "layout-saved" : "layout-not-saved"}>
+                  {venue.layoutData ? "✓ 3D Layout Saved" : "○ No saved layout"}
                 </div>
               </div>
 
-              <div style={{ marginTop: "16px", paddingTop: "14px", borderTop: "1px solid #eee" }}>
-                <div style={{
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  color: venue.modelUrl ? "#15803d" : "#777",
-                }}>
-                  {venue.modelUrl ? "✓ 3D Model Connected" : "○ No 3D Model"}
-                </div>
-
-                {venue.layoutData && (
-                  <div style={{
-                    marginTop: "6px",
-                    fontSize: "13px",
-                    color: "#15803d",
-                    fontWeight: 600,
-                  }}>
-                    ✓ 3D Layout Saved
-                  </div>
-                )}
-              </div>
-
-              <div className="venue-actions">
-                <button className="edit-btn" onClick={() => openEditModal(venue)}>
-                  ✏️ Edit
-                </button>
-
+              <div className="card-actions">
                 <button
-                  className="delete-btn"
-                  onClick={() => {
-                    if (window.confirm(`Delete "${venue.name}"?`)) {
-                      handleDelete(venue.id);
-                    }
-                  }}
+                  className="delete-button"
+                  type="button"
+                  onClick={() => void deleteVenue(venue.id, venue.name)}
                   disabled={deletingId === venue.id}
                 >
-                  {deletingId === venue.id ? "Deleting..." : "🗑️ Delete"}
+                  {deletingId === venue.id ? "Deleting..." : "Delete"}
                 </button>
-
-                <button
-                  onClick={() => openEditor(venue.id)}
-                  style={{
-                    width: "100%",
-                    marginTop: "8px",
-                    padding: "11px 14px",
-                    borderRadius: "8px",
-                    border: "1px solid #171717",
-                    background: "#171717",
-                    color: "#fff",
-                    cursor: "pointer",
-                    fontWeight: 600,
-                  }}
-                >
-                  🏛️ Open 3D Editor
+                <button className="editor-button" type="button" onClick={() => openEditor(venue)}>
+                  Open 3D Editor →
                 </button>
               </div>
             </article>
           ))}
-        </div>
+        </section>
       )}
 
       {showModal && (
-        <div className="modal-overlay" onClick={closeModal}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-backdrop" role="presentation" onMouseDown={closeModal}>
+          <section
+            className="venue-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-venue-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
             <div className="modal-header">
-              <h2>{editingVenue ? "Edit Venue" : "Add New Venue"}</h2>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={closeModal}
-                disabled={saving}
-              >
+              <div>
+                <span className="eyebrow">NEW VENUE</span>
+                <h2 id="add-venue-title">Add New Venue</h2>
+                <p>Create the venue and optionally attach its editable 3D model.</p>
+              </div>
+              <button className="close-button" type="button" onClick={closeModal} aria-label="Close">
                 ×
               </button>
             </div>
 
             <form className="venue-form" onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label>Venue Name *</label>
+              <label>
+                <span>VENUE NAME *</span>
                 <input
-                  type="text"
                   value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  onChange={(event) => updateField("name", event.target.value)}
                   placeholder="e.g. Grand Palace"
                   required
                 />
-              </div>
+              </label>
 
-              <div className="form-group">
-                <label>Location *</label>
+              <label>
+                <span>LOCATION *</span>
                 <input
-                  type="text"
                   value={form.location}
-                  onChange={(e) => setForm({ ...form, location: e.target.value })}
+                  onChange={(event) => updateField("location", event.target.value)}
                   placeholder="e.g. Delhi"
                   required
                 />
-              </div>
+              </label>
 
               <div className="form-row">
-                <div className="form-group">
-                  <label>Capacity *</label>
+                <label>
+                  <span>CAPACITY *</span>
                   <input
                     type="number"
                     min="1"
                     value={form.capacity}
-                    onChange={(e) => setForm({ ...form, capacity: e.target.value })}
+                    onChange={(event) => updateField("capacity", event.target.value)}
                     placeholder="500"
                     required
                   />
-                </div>
-
-                <div className="form-group">
-                  <label>Price (₹) *</label>
+                </label>
+                <label>
+                  <span>PRICE (₹) *</span>
                   <input
                     type="number"
                     min="0"
                     value={form.price}
-                    onChange={(e) => setForm({ ...form, price: e.target.value })}
+                    onChange={(event) => updateField("price", event.target.value)}
                     placeholder="100000"
                     required
                   />
-                </div>
+                </label>
               </div>
 
-              <div className="form-group">
-                <label>Venue Type *</label>
+              <label>
+                <span>VENUE TYPE *</span>
                 <select
                   value={form.type}
-                  onChange={(e) => setForm({ ...form, type: e.target.value })}
+                  onChange={(event) => updateField("type", event.target.value)}
                   required
                 >
-                  <option value="">Select type...</option>
+                  <option value="">Select venue type...</option>
+                  <option value="Banquet Hall">Banquet Hall</option>
                   <option value="Indoor">Indoor</option>
                   <option value="Outdoor">Outdoor</option>
                   <option value="Garden">Garden</option>
                   <option value="Beach">Beach</option>
                   <option value="Rooftop">Rooftop</option>
-                  <option value="Banquet Hall">Banquet Hall</option>
-                  <option value="Farmhouse">Farmhouse</option>
+                  <option value="Resort">Resort</option>
+                  <option value="Other">Other</option>
                 </select>
-              </div>
+              </label>
 
-              <div className="form-group">
-                <label>Upload 3D Venue Model</label>
-
+              <div className="upload-section">
+                <span className="upload-title">UPLOAD 3D VENUE MODEL <em>(OPTIONAL)</em></span>
                 <input
-                  ref={fileInputRef}
+                  id="venue-model-file"
                   type="file"
-                  accept=".glb,model/gltf-binary"
-                  onChange={handleModelFileChange}
-                  disabled={saving}
+                  accept=".glb,.fbx,.obj,model/gltf-binary,application/octet-stream"
+                  onChange={(event) => handleFileChange(event.target.files?.[0] || null)}
                 />
-
-                {selectedModelFile ? (
-                  <small style={{
-                    display: "block",
-                    marginTop: "8px",
-                    color: "#15803d",
-                    fontWeight: 600,
-                  }}>
-                    ✓ Selected: {selectedModelFile.name}
-                  </small>
-                ) : editingVenue && form.modelUrl ? (
-                  <small style={{
-                    display: "block",
-                    marginTop: "8px",
-                    color: "#64748b",
-                  }}>
-                    Current model will be kept unless you select a new .glb file.
-                  </small>
-                ) : (
-                  <small style={{
-                    display: "block",
-                    marginTop: "8px",
-                    color: "#64748b",
-                  }}>
-                    Select a .glb file. It will be uploaded and connected to this venue automatically.
-                  </small>
-                )}
-              </div>
-
-              <div className="form-checkbox">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={form.availability}
-                    onChange={(e) => setForm({
-                      ...form,
-                      availability: e.target.checked,
-                    })}
-                  />
-                  Available for booking
+                <label htmlFor="venue-model-file" className="file-picker">
+                  <span className="file-icon">⬆</span>
+                  <span>
+                    <strong>{modelFile ? modelFile.name : "Choose 3D model"}</strong>
+                    <small>{modelFile ? `${(modelFile.size / (1024 * 1024)).toFixed(2)} MB` : "GLB, FBX or OBJ · Maximum 100 MB"}</small>
+                  </span>
                 </label>
+                <p className="upload-help">
+                  The selected model will be connected to this venue and opened in the 3D workspace. ZIP files are intentionally not supported.
+                </p>
               </div>
 
-              <div className="form-actions">
-                <button
-                  type="button"
-                  className="btn-cancel"
-                  onClick={closeModal}
-                  disabled={saving}
-                >
+              <label className="availability-row">
+                <input
+                  type="checkbox"
+                  checked={form.availability}
+                  onChange={(event) => updateField("availability", event.target.checked)}
+                />
+                <span>
+                  <strong>Available for booking</strong>
+                  <small>The venue will be shown as available.</small>
+                </span>
+              </label>
+
+              {formError && <div className="form-error">{formError}</div>}
+
+              <div className="modal-actions">
+                <button type="button" className="secondary-button" onClick={closeModal} disabled={submitting}>
                   Cancel
                 </button>
-
-                <button
-                  type="submit"
-                  className="btn-save"
-                  disabled={saving}
-                >
-                  {saving
-                    ? "Saving..."
-                    : editingVenue
-                    ? "Update Venue"
-                    : "Add Venue"}
+                <button type="submit" className="primary-button" disabled={submitting}>
+                  {submitting ? "Adding Venue..." : "Add Venue"}
                 </button>
               </div>
             </form>
-          </div>
+          </section>
         </div>
       )}
+
+      <style jsx>{`
+        .venues-page { min-height: 100vh; background: #f5f7fb; color: #223047; padding: 40px 54px 70px; font-family: Arial, Helvetica, sans-serif; }
+        .venues-header { display: flex; justify-content: space-between; gap: 30px; align-items: flex-end; margin-bottom: 22px; }
+        .eyebrow { display: block; color: #60719b; font-size: 11px; font-weight: 800; letter-spacing: .14em; margin-bottom: 7px; }
+        h1 { margin: 0; font-size: 38px; letter-spacing: -.03em; }
+        .venues-header p { margin: 10px 0 0; color: #68778d; font-size: 16px; }
+        .primary-button, .editor-button { border: 0; border-radius: 10px; background: #315bb6; color: white; font-weight: 700; cursor: pointer; padding: 14px 22px; box-shadow: 0 8px 20px rgba(49,91,182,.2); transition: .2s; }
+        .primary-button:hover, .editor-button:hover { transform: translateY(-1px); background: #294d9a; }
+        button:disabled { cursor: not-allowed; opacity: .65; transform: none !important; }
+        .summary-row { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 22px; color: #75839a; font-size: 14px; }
+        .refresh-button { border: 1px solid #d9e0ec; border-radius: 8px; background: white; color: #53637b; padding: 9px 13px; cursor: pointer; font-weight: 700; }
+        .venues-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; max-width: 1500px; }
+        .venue-card { background: white; border: 1px solid #dfe5ef; border-radius: 18px; padding: 28px; box-shadow: 0 10px 30px rgba(38,55,86,.06); transition: .2s; }
+        .venue-card:hover { transform: translateY(-3px); box-shadow: 0 16px 35px rgba(38,55,86,.1); }
+        .card-topline { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .venue-type { background: #edf1ff; color: #5361a8; border-radius: 999px; padding: 7px 13px; text-transform: uppercase; font-size: 12px; font-weight: 800; }
+        .status { border-radius: 999px; padding: 7px 12px; font-size: 12px; font-weight: 800; }
+        .available { background: #e9f7ee; color: #267047; }
+        .unavailable { background: #fff0ee; color: #ad4a41; }
+        .venue-card h2 { font-size: 23px; margin: 22px 0; text-transform: none; }
+        .venue-details { display: grid; gap: 14px; }
+        .venue-details > div { display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 8px; }
+        .venue-details span { color: #6a58a5; }
+        .venue-details p { margin: 0; color: #758196; font-size: 14px; }
+        .venue-details strong { font-size: 14px; color: #2d3a4d; }
+        .model-status { border-top: 1px solid #edf0f4; border-bottom: 1px solid #edf0f4; margin: 24px 0 18px; padding: 16px 0; display: grid; gap: 9px; color: #5c687a; font-size: 14px; font-weight: 700; }
+        .model-status > div { display: flex; align-items: center; gap: 7px; }
+        .model-dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid #aeb8c8; display: inline-block; }
+        .model-dot.connected { background: #2ca567; border-color: #2ca567; }
+        .layout-saved { color: #28714c; }
+        .layout-not-saved { color: #778397; }
+        .card-actions { display: flex; gap: 12px; align-items: center; }
+        .delete-button { background: white; color: #b44c46; border: 1px solid #efc7c2; border-radius: 10px; padding: 13px 16px; font-weight: 700; cursor: pointer; }
+        .editor-button { flex: 1; text-align: center; padding: 13px 16px; }
+        .state-card { min-height: 330px; border: 1px solid #dfe5ef; border-radius: 18px; background: white; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 30px; box-shadow: 0 10px 30px rgba(38,55,86,.05); }
+        .state-card h2 { margin: 15px 0 7px; font-size: 24px; }
+        .state-card p { max-width: 500px; color: #6e7b90; line-height: 1.6; margin: 0 0 20px; }
+        .spinner { width: 34px; height: 34px; border: 3px solid #dfe5f4; border-top-color: #315bb6; border-radius: 50%; animation: spin .8s linear infinite; }
+        .state-icon, .empty-icon { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 50%; background: #eef2ff; color: #315bb6; font-size: 28px; font-weight: 800; }
+        .error-card .state-icon { background: #fff0ef; color: #c75148; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .modal-backdrop { position: fixed; inset: 0; z-index: 1000; background: rgba(20,30,47,.55); backdrop-filter: blur(4px); display: grid; place-items: center; padding: 24px; }
+        .venue-modal { width: min(700px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; background: #fff; border-radius: 20px; box-shadow: 0 28px 80px rgba(0,0,0,.25); }
+        .modal-header { display: flex; justify-content: space-between; gap: 20px; padding: 30px 34px 24px; border-bottom: 1px solid #e8edf4; }
+        .modal-header h2 { margin: 0; font-size: 28px; }
+        .modal-header p { color: #6d7b91; margin: 8px 0 0; }
+        .close-button { width: 40px; height: 40px; border: 0; border-radius: 10px; background: #f2f5f9; color: #60708a; font-size: 28px; line-height: 1; cursor: pointer; }
+        .venue-form { padding: 28px 34px 34px; display: grid; gap: 19px; }
+        .venue-form label { display: grid; gap: 8px; color: #4d5a6d; font-weight: 800; font-size: 13px; letter-spacing: .04em; }
+        .venue-form input, .venue-form select { width: 100%; box-sizing: border-box; border: 1px solid #cfd8e6; border-radius: 10px; min-height: 50px; padding: 0 15px; color: #26354b; background: #fff; outline: none; font-size: 15px; font-weight: 500; }
+        .venue-form input:focus, .venue-form select:focus { border-color: #315bb6; box-shadow: 0 0 0 3px rgba(49,91,182,.1); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+        .upload-section { display: grid; gap: 10px; }
+        .upload-title { color: #4d5a6d; font-size: 13px; font-weight: 800; letter-spacing: .04em; }
+        .upload-title em { color: #8b96a7; font-style: normal; font-weight: 600; }
+        #venue-model-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        .file-picker { min-height: 82px; display: flex !important; grid-template-columns: none !important; flex-direction: row; align-items: center; gap: 14px !important; border: 1px dashed #9cabc3; border-radius: 12px; padding: 14px 17px; background: #f9fbfe; cursor: pointer; letter-spacing: normal !important; }
+        .file-picker:hover { border-color: #315bb6; background: #f4f7ff; }
+        .file-picker span:last-child { display: grid; gap: 4px; }
+        .file-picker strong { color: #33435b; font-size: 14px; overflow-wrap: anywhere; }
+        .file-picker small { color: #7c899c; font-size: 12px; font-weight: 500; }
+        .file-icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 9px; background: #e8eeff; color: #315bb6; }
+        .upload-help { margin: 0; color: #78869a; font-size: 12px; line-height: 1.5; }
+        .availability-row { display: flex !important; grid-template-columns: none !important; flex-direction: row; align-items: center; gap: 12px !important; letter-spacing: normal !important; cursor: pointer; }
+        .availability-row input { width: 20px; min-height: 20px; accent-color: #315bb6; }
+        .availability-row span { display: grid; gap: 4px; }
+        .availability-row strong { font-size: 15px; color: #344258; }
+        .availability-row small { font-size: 12px; color: #7d899b; font-weight: 500; }
+        .form-error { border: 1px solid #f1c8c4; background: #fff3f2; color: #ad4841; border-radius: 10px; padding: 13px 15px; font-size: 14px; line-height: 1.45; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 5px; }
+        .secondary-button { border: 1px solid #d5dde8; background: white; color: #526177; border-radius: 10px; padding: 13px 21px; font-weight: 700; cursor: pointer; }
+        @media (max-width: 720px) { .venues-page { padding: 28px 20px 50px; } .venues-header { align-items: stretch; flex-direction: column; } .venues-header .primary-button { width: 100%; } .form-row { grid-template-columns: 1fr; } .modal-header, .venue-form { padding-left: 22px; padding-right: 22px; } .card-actions { flex-direction: column; } .card-actions button { width: 100%; } }
+      `}</style>
     </main>
   );
 }
