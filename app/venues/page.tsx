@@ -13,6 +13,9 @@ type Venue = {
   availability: boolean;
   modelUrl: string | null;
   layoutData?: string | null;
+  width: number;
+  depth: number;
+  boundaryData?: string | null;
 };
 
 type VenueFormState = {
@@ -21,6 +24,9 @@ type VenueFormState = {
   capacity: string;
   type: string;
   price: string;
+  width: string;
+  depth: string;
+  boundaryData: string;
   availability: boolean;
 };
 
@@ -30,6 +36,9 @@ const EMPTY_FORM: VenueFormState = {
   capacity: "",
   type: "",
   price: "",
+  width: "12",
+  depth: "12",
+  boundaryData: "",
   availability: true,
 };
 
@@ -164,6 +173,8 @@ export default function VenuesPage() {
 
     const capacity = Number(form.capacity);
     const price = Number(form.price);
+    const width = Number(form.width);
+    const depth = Number(form.depth);
 
     if (!Number.isFinite(capacity) || capacity <= 0) {
       setFormError("Please enter a valid capacity greater than 0.");
@@ -175,6 +186,21 @@ export default function VenuesPage() {
       return;
     }
 
+    if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(depth) || depth <= 0) {
+      setFormError("Please enter valid venue width and depth in metres.");
+      return;
+    }
+
+    if (form.boundaryData.trim()) {
+      try {
+        const boundary = JSON.parse(form.boundaryData);
+        if (!Array.isArray(boundary) || boundary.length < 3) throw new Error();
+      } catch {
+        setFormError('Boundary points must be valid JSON with at least 3 points, for example [{"x":-5,"z":-4},{"x":5,"z":-4},{"x":0,"z":4}].');
+        return;
+      }
+    }
+
     try {
       setSubmitting(true);
 
@@ -184,6 +210,9 @@ export default function VenuesPage() {
       body.append("capacity", String(capacity));
       body.append("type", form.type.trim());
       body.append("price", String(price));
+      body.append("width", String(width));
+      body.append("depth", String(depth));
+      body.append("boundaryData", form.boundaryData.trim());
       body.append("availability", String(form.availability));
 
       if (modelFile) {
@@ -410,6 +439,42 @@ export default function VenuesPage() {
                   />
                 </label>
               </div>
+
+              <div className="form-row">
+                <label>
+                  <span>REAL WIDTH (METRES) *</span>
+                  <input
+                    type="number"
+                    min="0.1"
+                    step="0.1"
+                    value={form.width}
+                    onChange={(event) => updateField("width", event.target.value)}
+                    required
+                  />
+                </label>
+                <label>
+                  <span>REAL DEPTH (METRES) *</span>
+                  <input
+                    type="number"
+                    min="0.1"
+                    step="0.1"
+                    value={form.depth}
+                    onChange={(event) => updateField("depth", event.target.value)}
+                    required
+                  />
+                </label>
+              </div>
+
+              <label>
+                <span>IRREGULAR FLOOR BOUNDARY (OPTIONAL JSON)</span>
+                <textarea
+                  value={form.boundaryData}
+                  onChange={(event) => updateField("boundaryData", event.target.value)}
+                  placeholder={'[{"x":-5,"z":-4},{"x":5,"z":-4},{"x":6,"z":1},{"x":2,"z":4},{"x":-5,"z":3}]'}
+                  rows={4}
+                />
+                <small>Leave empty for a rectangular floor. Points are in real metres and must describe the usable floor boundary.</small>
+              </label>
 
               <label>
                 <span>VENUE TYPE *</span>

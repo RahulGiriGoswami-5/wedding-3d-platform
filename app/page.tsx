@@ -27,7 +27,169 @@ type Venue = {
   availability: boolean;
   modelUrl: string | null;
   layoutData: string | null;
+  width?: number;
+  depth?: number;
+  boundaryData?: string | null;
 };
+
+
+/* =========================================================
+   REAL-WORLD VENUE BOUNDARY
+
+   boundaryData stores an optional polygon as JSON points:
+   [{"x": -5, "z": -4}, {"x": 5, "z": -4}, ...]
+
+   When no custom polygon exists, the venue automatically uses
+   its real width × depth rectangle.
+========================================================= */
+
+type BoundaryPoint = { x: number; z: number };
+
+function getVenueDimensions(venue: Venue | null) {
+  return {
+    width: typeof venue?.width === "number" && venue.width > 0 ? venue.width : 12,
+    depth: typeof venue?.depth === "number" && venue.depth > 0 ? venue.depth : 12,
+  };
+}
+
+function rectangleBoundary(width: number, depth: number): BoundaryPoint[] {
+  const halfWidth = width / 2;
+  const halfDepth = depth / 2;
+  return [
+    { x: -halfWidth, z: -halfDepth },
+    { x: halfWidth, z: -halfDepth },
+    { x: halfWidth, z: halfDepth },
+    { x: -halfWidth, z: halfDepth },
+  ];
+}
+
+function parseBoundaryData(venue: Venue | null): BoundaryPoint[] {
+  const dimensions = getVenueDimensions(venue);
+  const fallback = rectangleBoundary(dimensions.width, dimensions.depth);
+  if (!venue?.boundaryData || typeof venue.boundaryData !== "string") return fallback;
+
+  try {
+    const raw: unknown = JSON.parse(venue.boundaryData);
+    if (!Array.isArray(raw) || raw.length < 3) return fallback;
+
+    const points = raw
+      .map((point): BoundaryPoint | null => {
+        if (!point || typeof point !== "object") return null;
+        const candidate = point as { x?: unknown; z?: unknown };
+        const x = Number(candidate.x);
+        const z = Number(candidate.z);
+        return Number.isFinite(x) && Number.isFinite(z) ? { x, z } : null;
+      })
+      .filter((point): point is BoundaryPoint => point !== null);
+
+    return points.length >= 3 ? points : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function pointOnSegment(point: BoundaryPoint, a: BoundaryPoint, b: BoundaryPoint) {
+  const cross = (point.z - a.z) * (b.x - a.x) - (point.x - a.x) * (b.z - a.z);
+  if (Math.abs(cross) > 1e-8) return false;
+  const dot = (point.x - a.x) * (point.x - b.x) + (point.z - a.z) * (point.z - b.z);
+  return dot <= 1e-8;
+}
+
+function isPointInsidePolygon(point: BoundaryPoint, polygon: BoundaryPoint[]) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i];
+    const b = polygon[j];
+    if (pointOnSegment(point, a, b)) return true;
+    const intersects =
+      (a.z > point.z) !== (b.z > point.z) &&
+      point.x < ((b.x - a.x) * (point.z - a.z)) / (b.z - a.z) + a.x;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function orientation(a: BoundaryPoint, b: BoundaryPoint, c: BoundaryPoint) {
+  const value = (b.z - a.z) * (c.x - b.x) - (b.x - a.x) * (c.z - b.z);
+  if (Math.abs(value) < 1e-8) return 0;
+  return value > 0 ? 1 : -1;
+}
+
+function segmentsIntersect(a: BoundaryPoint, b: BoundaryPoint, c: BoundaryPoint, d: BoundaryPoint) {
+  const o1 = orientation(a, b, c);
+  const o2 = orientation(a, b, d);
+  const o3 = orientation(c, d, a);
+  const o4 = orientation(c, d, b);
+
+  if (o1 !== o2 && o3 !== o4) return true;
+  if (o1 === 0 && pointOnSegment(c, a, b)) return true;
+  if (o2 === 0 && pointOnSegment(d, a, b)) return true;
+  if (o3 === 0 && pointOnSegment(a, c, d)) return true;
+  if (o4 === 0 && pointOnSegment(b, c, d)) return true;
+  return false;
+}
+
+function getFurnitureFootprint(item: FurnitureItem, position = item.position, rotation = item.rotation): BoundaryPoint[] {
+  const dimensions = getItemDimensions(item);
+  const halfWidth = dimensions.width / 2;
+  const halfDepth = dimensions.depth / 2;
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+
+  return [
+    [-halfWidth, -halfDepth],
+    [halfWidth, -halfDepth],
+    [halfWidth, halfDepth],
+    [-halfWidth, halfDepth],
+  ].map(([x, z]) => ({
+    x: position[0] + x * cos - z * sin,
+    z: position[2] + x * sin + z * cos,
+  }));
+}
+
+function isFurnitureInsideBoundary(item: FurnitureItem, boundary: BoundaryPoint[], position = item.position, rotation = item.rotation) {
+  const footprint = getFurnitureFootprint(item, position, rotation);
+  if (!footprint.every((point) => isPointInsidePolygon(point, boundary))) return false;
+
+  for (let i = 0; i < footprint.length; i++) {
+    const a = footprint[i];
+    const b = footprint[(i + 1) % footprint.length];
+    for (let j = 0; j < boundary.length; j++) {
+      const c = boundary[j];
+      const d = boundary[(j + 1) % boundary.length];
+      if (segmentsIntersect(a, b, c, d)) {
+        const aOnBoundary = pointOnSegment(a, c, d);
+        const bOnBoundary = pointOnSegment(b, c, d);
+        if (!aOnBoundary && !bOnBoundary) return false;
+      }
+    }
+  }
+  return true;
+}
+
+
+function findInitialPosition(item: FurnitureItem, boundary: BoundaryPoint[]): [number, number, number] {
+  if (isFurnitureInsideBoundary(item, boundary, [0, 0, 0], item.rotation)) {
+    return [0, 0, 0];
+  }
+
+  const minX = Math.min(...boundary.map((point) => point.x));
+  const maxX = Math.max(...boundary.map((point) => point.x));
+  const minZ = Math.min(...boundary.map((point) => point.z));
+  const maxZ = Math.max(...boundary.map((point) => point.z));
+
+  // Search practical half-metre positions inside the usable polygon.
+  for (let z = minZ; z <= maxZ; z += 0.5) {
+    for (let x = minX; x <= maxX; x += 0.5) {
+      const candidate: [number, number, number] = [x, 0, z];
+      if (isFurnitureInsideBoundary(item, boundary, candidate, item.rotation)) {
+        return candidate;
+      }
+    }
+  }
+
+  return [0, 0, 0];
+}
 
 type ElementType =
   | "chair"
@@ -417,7 +579,7 @@ function createModel(
    visible even when there are no furniture items.
 ========================================================= */
 
-function prepareVenueModel(source: THREE.Object3D) {
+function prepareVenueModel(source: THREE.Object3D, venueWidth = 12, venueDepth = 12) {
   const cloned = source.clone(true);
 
   cloned.updateMatrixWorld(true);
@@ -427,18 +589,13 @@ function prepareVenueModel(source: THREE.Object3D) {
 
   box.getSize(size);
 
-  const largestDimension = Math.max(
-    size.x,
-    size.y,
-    size.z,
-    0.001
-  );
-
-  // Fit venue exports from different modelling programs into the editor.
-  const targetSize = 11;
-  const scale = targetSize / largestDimension;
-
-  cloned.scale.setScalar(scale);
+  // Match the model footprint to the venue's real-world width and depth.
+  // Height is scaled uniformly from the average horizontal scale so the
+  // venue does not become unnaturally stretched vertically.
+  const scaleX = size.x > 0 ? venueWidth / size.x : 1;
+  const scaleZ = size.z > 0 ? venueDepth / size.z : 1;
+  const horizontalScale = (scaleX + scaleZ) / 2;
+  cloned.scale.set(scaleX, horizontalScale, scaleZ);
   cloned.updateMatrixWorld(true);
 
   const scaledBox = new THREE.Box3().setFromObject(cloned);
@@ -455,23 +612,23 @@ function prepareVenueModel(source: THREE.Object3D) {
   return cloned;
 }
 
-function VenueGLTFModel({ url }: { url: string }) {
+function VenueGLTFModel({ url, width, depth }: { url: string; width: number; depth: number }) {
   const { scene } = useGLTF(url);
-  const model = useMemo(() => prepareVenueModel(scene), [scene]);
+  const model = useMemo(() => prepareVenueModel(scene, width, depth), [scene, width, depth]);
 
   return <primitive object={model} dispose={null} />;
 }
 
-function VenueFBXModel({ url }: { url: string }) {
+function VenueFBXModel({ url, width, depth }: { url: string; width: number; depth: number }) {
   const scene = useLoader(FBXLoader, url);
-  const model = useMemo(() => prepareVenueModel(scene), [scene]);
+  const model = useMemo(() => prepareVenueModel(scene, width, depth), [scene, width, depth]);
 
   return <primitive object={model} dispose={null} />;
 }
 
-function VenueOBJModel({ url }: { url: string }) {
+function VenueOBJModel({ url, width, depth }: { url: string; width: number; depth: number }) {
   const scene = useLoader(OBJLoader, url);
-  const model = useMemo(() => prepareVenueModel(scene), [scene]);
+  const model = useMemo(() => prepareVenueModel(scene, width, depth), [scene, width, depth]);
 
   return <primitive object={model} dispose={null} />;
 }
@@ -510,125 +667,31 @@ class ModelErrorBoundary extends Component<
   }
 }
 
-type ModelLoadStatus = "checking" | "ready" | "missing" | "unsupported";
+function VenueModel({ url, width, depth }: { url: string; width: number; depth: number }) {
+  const cleanUrl = url.split("?")[0].toLowerCase();
 
-function getModelExtension(url: string) {
-  const cleanUrl = url.split("?")[0].split("#")[0].toLowerCase();
-  const match = cleanUrl.match(/\.([a-z0-9]+)$/);
-  return match?.[1] || "";
-}
-
-function isSupportedVenueModel(url: string) {
-  return ["fbx", "obj", "glb", "gltf"].includes(getModelExtension(url));
-}
-
-function VenueModel({ url }: { url: string }) {
-  const [status, setStatus] = useState<ModelLoadStatus>("checking");
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!isSupportedVenueModel(url)) {
-      setStatus("unsupported");
-      return;
-    }
-
-    setStatus("checking");
-
-    // Check the file before Three.js creates a loader. A stale database URL
-    // must never crash the complete editor or lose the WebGL context.
-    fetch(url, { method: "HEAD", cache: "no-store" })
-      .then(async response => {
-        if (!response.ok) {
-          throw new Error(`Model request failed with ${response.status}`);
-        }
-        if (!cancelled) setStatus("ready");
-      })
-      .catch(() => {
-        if (!cancelled) setStatus("missing");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [url]);
-
-  if (status !== "ready") return null;
-
-  const extension = getModelExtension(url);
-
-  if (extension === "fbx") {
-    return <VenueFBXModel url={url} />;
+  if (cleanUrl.endsWith(".fbx")) {
+    return <VenueFBXModel url={url} width={width} depth={depth} />;
   }
 
-  if (extension === "obj") {
-    return <VenueOBJModel url={url} />;
+  if (cleanUrl.endsWith(".obj")) {
+    return <VenueOBJModel url={url} width={width} depth={depth} />;
   }
 
-  return <VenueGLTFModel url={url} />;
-}
+  // GLB and GLTF files are handled by GLTFLoader through useGLTF.
+  if (
+    cleanUrl.endsWith(".glb") ||
+    cleanUrl.endsWith(".gltf")
+  ) {
+    return <VenueGLTFModel url={url} width={width} depth={depth} />;
+  }
 
-function VenueModelNotice({ url }: { url: string | null }) {
-  const [status, setStatus] = useState<ModelLoadStatus>("checking");
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!url) {
-      setStatus("missing");
-      return;
-    }
-
-    if (!isSupportedVenueModel(url)) {
-      setStatus("unsupported");
-      return;
-    }
-
-    setStatus("checking");
-
-    fetch(url, { method: "HEAD", cache: "no-store" })
-      .then(response => {
-        if (!response.ok) throw new Error("Model is unavailable");
-        if (!cancelled) setStatus("ready");
-      })
-      .catch(() => {
-        if (!cancelled) setStatus("missing");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [url]);
-
-  if (status === "checking" || status === "ready") return null;
-
-  const message = status === "unsupported"
-    ? "Unsupported venue model format. Use GLB, GLTF, FBX or OBJ."
-    : "Venue model file was not found. The editor is still working safely.";
-
-  return (
-    <div
-      style={{
-        position: "absolute",
-        top: 16,
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 40,
-        background: "rgba(255, 255, 255, 0.96)",
-        color: "#991b1b",
-        border: "1px solid #fecaca",
-        borderRadius: 10,
-        padding: "10px 14px",
-        fontSize: 12,
-        fontWeight: 700,
-        boxShadow: "0 6px 20px rgba(15, 23, 42, 0.12)",
-        maxWidth: "80%",
-        textAlign: "center",
-      }}
-    >
-      {message}
-    </div>
+  console.warn(
+    "Unsupported venue model format. Supported formats are GLB, GLTF, FBX and OBJ:",
+    url
   );
+
+  return null;
 }
 
 /* =========================================================
@@ -643,6 +706,7 @@ function Furniture3D({
   onSelect,
   onMeasureSelect,
   onMove,
+  boundary,
 }: {
   item: FurnitureItem;
   selected: boolean;
@@ -653,6 +717,7 @@ function Furniture3D({
   onMove: (
     position: [number, number, number]
   ) => void;
+  boundary: BoundaryPoint[];
 }) {
   /*
      IMPORTANT:
@@ -764,29 +829,10 @@ function Furniture3D({
     );
 
     if (point) {
-      /*
-         Keep the object inside
-         the 12m × 12m venue.
-
-         The centre is kept between
-         -5.5m and +5.5m.
-      */
-
-      onMove([
-        THREE.MathUtils.clamp(
-          point.x,
-          -5.5,
-          5.5
-        ),
-
-        0,
-
-        THREE.MathUtils.clamp(
-          point.z,
-          -5.5,
-          5.5
-        ),
-      ]);
+      const candidate: [number, number, number] = [point.x, 0, point.z];
+      if (isFurnitureInsideBoundary(item, boundary, candidate, item.rotation)) {
+        onMove(candidate);
+      }
     }
   };
 
@@ -890,6 +936,7 @@ function Furniture2D({
   onSelect,
   onMeasureSelect,
   onMove,
+  boundary,
 }: {
   item: FurnitureItem;
   selected: boolean;
@@ -900,6 +947,7 @@ function Furniture2D({
   onMove: (
     position: [number, number, number]
   ) => void;
+  boundary: BoundaryPoint[];
 }) {
   const {
     camera,
@@ -972,21 +1020,10 @@ function Furniture2D({
     );
 
     if (point) {
-      onMove([
-        THREE.MathUtils.clamp(
-          point.x,
-          -5.5,
-          5.5
-        ),
-
-        0,
-
-        THREE.MathUtils.clamp(
-          point.z,
-          -5.5,
-          5.5
-        ),
-      ]);
+      const candidate: [number, number, number] = [point.x, 0, point.z];
+      if (isFurnitureInsideBoundary(item, boundary, candidate, item.rotation)) {
+        onMove(candidate);
+      }
     }
   };
 
@@ -1213,108 +1250,61 @@ function Floor({
   onClear,
   primaryColor = "#2563eb",
   secondaryColor = "#f8fafc",
+  boundary,
 }: {
   onClear: () => void;
   primaryColor?: string;
   secondaryColor?: string;
+  boundary: BoundaryPoint[];
 }) {
+  const shape = useMemo(() => {
+    const next = new THREE.Shape();
+    if (boundary.length > 0) {
+      next.moveTo(boundary[0].x, boundary[0].z);
+      boundary.slice(1).forEach((point) => next.lineTo(point.x, point.z));
+      next.closePath();
+    }
+    return next;
+  }, [boundary]);
+
+  const bounds = useMemo(() => {
+    const xs = boundary.map((point) => point.x);
+    const zs = boundary.map((point) => point.z);
+    return {
+      width: Math.max(...xs) - Math.min(...xs),
+      depth: Math.max(...zs) - Math.min(...zs),
+      centerX: (Math.max(...xs) + Math.min(...xs)) / 2,
+      centerZ: (Math.max(...zs) + Math.min(...zs)) / 2,
+    };
+  }, [boundary]);
+
+  const linePoints = boundary.map((point) => [point.x, 0.04, point.z] as [number, number, number]);
+  if (linePoints.length > 0) linePoints.push([...linePoints[0]] as [number, number, number]);
+
   return (
     <>
-      {/* =================================================
-          WHITE VENUE PLATFORM
-      ================================================= */}
-
-      <mesh
-        rotation={[
-          -Math.PI / 2,
-          0,
-          0,
-        ]}
-        onPointerDown={
-          onClear
-        }
-      >
-        <planeGeometry
-          args={[
-            12,
-            12,
-          ]}
-        />
-
-        <meshStandardMaterial
-          color={secondaryColor}
-          side={
-            THREE.DoubleSide
-          }
-        />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} onPointerDown={onClear}>
+        <shapeGeometry args={[shape]} />
+        <meshStandardMaterial color={secondaryColor} side={THREE.DoubleSide} />
       </mesh>
 
-      {/* =================================================
-          GRID
-      ================================================= */}
-
       <Grid
-        args={[
-          12,
-          12,
-        ]}
+        args={[Math.max(bounds.width, 1), Math.max(bounds.depth, 1)]}
         cellSize={0.5}
         cellThickness={0.7}
         cellColor={secondaryColor}
         sectionSize={1}
         sectionThickness={1.2}
         sectionColor={primaryColor}
-        fadeDistance={20}
+        fadeDistance={Math.max(bounds.width, bounds.depth) * 2}
         fadeStrength={0}
         infiniteGrid={false}
-        position={[
-          0,
-          0.02,
-          0,
-        ]}
+        position={[bounds.centerX, 0.02, bounds.centerZ]}
       />
 
-      {/* =================================================
-          PLATFORM BORDER
-      ================================================= */}
-
-      <Line
-        points={[
-          [-6, 0.04, -6],
-          [6, 0.04, -6],
-          [6, 0.04, 6],
-          [-6, 0.04, 6],
-          [-6, 0.04, -6],
-        ]}
-        color={primaryColor}
-        lineWidth={3}
-      />
-
-      {/* =================================================
-          TOP/BOTTOM DIMENSION
-      ================================================= */}
-
-      <Line
-        points={[
-          [-6, 0.05, 6.35],
-          [6, 0.05, 6.35],
-        ]}
-        color="#6b7280"
-        lineWidth={1}
-      />
-
-      {/* =================================================
-          LEFT/RIGHT DIMENSION
-      ================================================= */}
-
-      <Line
-        points={[
-          [-6.35, 0.05, -6],
-          [-6.35, 0.05, 6],
-        ]}
-        color="#6b7280"
-        lineWidth={1}
-      />
+      {linePoints.length >= 4 && (
+        <Line points={linePoints} color={primaryColor} lineWidth={3} />
+      )}
     </>
   );
 }
@@ -1548,7 +1538,6 @@ function LeftNav({
       {options.map(
         ([icon, label]) => (
           <button
-            type="button"
             key={label}
             className={
               active ===
@@ -1575,7 +1564,7 @@ function LeftNav({
 
       <div className="nav-spacer" />
 
-      <button type="button" className="nav-item" onClick={() => setActive("Info")}>
+      <button className="nav-item">
         <span className="nav-icon">
           ?
         </span>
@@ -1585,73 +1574,6 @@ function LeftNav({
         </span>
       </button>
     </nav>
-  );
-}
-
-/* =========================================================
-   NAVIGATION CONTENT PANEL
-========================================================= */
-
-function NavigationPanel({
-  active,
-  venue,
-  items,
-}: {
-  active: string;
-  venue: Venue | null;
-  items: FurnitureItem[];
-}) {
-  if (active === "Project") {
-    return (
-      <section className="build-panel">
-        <div className="panel-heading">Project</div>
-        <div className="panel-content">
-          <div className="section-title">Venue Details</div>
-          <div className="tip-box">
-            <p><strong>{venue?.name || "Wedding Venue"}</strong></p>
-            <p>{venue?.location || "No location selected"}</p>
-            <p>Capacity: {venue?.capacity ?? "—"}</p>
-            <p>Type: {venue?.type || "—"}</p>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  if (active === "Objects") {
-    return (
-      <section className="build-panel">
-        <div className="panel-heading">Objects</div>
-        <div className="panel-content">
-          <div className="section-title">Placed Elements ({items.length})</div>
-          {items.length === 0 ? (
-            <div className="tip-box">No objects have been placed yet.</div>
-          ) : (
-            items.map(item => (
-              <div key={item.id} className="tip-box" style={{ marginBottom: 8 }}>
-                <strong>{item.name || LABELS[item.type]}</strong>
-                <p>{item.type}</p>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section className="build-panel">
-      <div className="panel-heading">Info</div>
-      <div className="panel-content">
-        <div className="section-title">Designer Help</div>
-        <div className="tip-box">
-          <p>Use <strong>Build</strong> to add inventory items.</p>
-          <p>Select an object to see its properties.</p>
-          <p>Use the 2D / 3D buttons to change the view.</p>
-          <p>If a venue model file is missing, the editor stays open safely.</p>
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -2374,16 +2296,7 @@ export default function Home() {
         }
 
         if (!cancelled) {
-          const normalizedThemes: Theme[] = Array.isArray(data)
-            ? data
-                .map((theme: any) => ({
-                  ...theme,
-                  id: Number(theme?.id),
-                }))
-                .filter((theme: Theme) => Number.isFinite(theme.id))
-            : [];
-
-          setThemes(normalizedThemes);
+          setThemes(Array.isArray(data) ? data : []);
         }
       } catch (err) {
         console.error("Failed to load themes:", err);
@@ -2395,34 +2308,6 @@ export default function Home() {
 
     loadThemes();
     return () => { cancelled = true; };
-  }, []);
-
-  /* =======================================================
-     RESTORE THEME SELECTION
-
-     A theme chosen before the current page reload is kept
-     locally so the editor does not incorrectly show the
-     "No theme selected" / "Choose a Theme" prompt again.
-  ======================================================= */
-
-  useEffect(() => {
-    try {
-      const storedThemeId = window.localStorage.getItem(
-        "wedding-selected-theme-id"
-      );
-
-      if (storedThemeId !== null) {
-        const parsedThemeId = Number(storedThemeId);
-
-        if (Number.isFinite(parsedThemeId)) {
-          setSelectedThemeId(currentId =>
-            currentId === null ? parsedThemeId : currentId
-          );
-        }
-      }
-    } catch (err) {
-      console.warn("Could not restore selected theme:", err);
-    }
   }, []);
 
   /* =======================================================
@@ -2714,11 +2599,9 @@ useEffect(() => {
               ? null
               : toNumber(design.themeId);
 
-          // A saved design theme takes priority. If an older design has
-          // no themeId, keep a locally restored theme instead of clearing it.
-          if (savedThemeId !== null) {
-            setSelectedThemeId(savedThemeId);
-          }
+          setSelectedThemeId(
+            savedThemeId
+          );
 
           /* ===================================================
              LOAD THE VENUE BELONGING TO THE SAVED DESIGN
@@ -3001,21 +2884,8 @@ useEffect(() => {
       return;
     }
 
-    const foundTheme =
-      themes.find(theme => Number(theme.id) === Number(selectedThemeId)) || null;
-
+    const foundTheme = themes.find(theme => theme.id === selectedThemeId) || null;
     setSelectedTheme(foundTheme);
-
-    if (foundTheme) {
-      try {
-        window.localStorage.setItem(
-          "wedding-selected-theme-id",
-          String(foundTheme.id)
-        );
-      } catch (err) {
-        console.warn("Could not store selected theme:", err);
-      }
-    }
   }, [themes, selectedThemeId]);
 
   /* =======================================================
@@ -3099,32 +2969,17 @@ useEffect(() => {
         setItems(
           current =>
             current.map(
-              item =>
-                item.id ===
-                selectedId
-                  ? {
-                      ...item,
-
-                      position:
-                        [
-                          THREE.MathUtils.clamp(
-                            item.position[0] +
-                              dx,
-                            -5.5,
-                            5.5
-                          ),
-
-                          0,
-
-                          THREE.MathUtils.clamp(
-                            item.position[2] +
-                              dz,
-                            -5.5,
-                            5.5
-                          ),
-                        ],
-                    }
-                  : item
+              item => {
+                if (item.id !== selectedId) return item;
+                const candidate: [number, number, number] = [
+                  item.position[0] + dx,
+                  0,
+                  item.position[2] + dz,
+                ];
+                return isFurnitureInsideBoundary(item, venueBoundary, candidate, item.rotation)
+                  ? { ...item, position: candidate }
+                  : item;
+              }
             )
         );
       }
@@ -3217,6 +3072,8 @@ useEffect(() => {
       rotation: 0,
     };
 
+    item.position = findInitialPosition(item, venueBoundary);
+
     setItems(
       current => [
         ...current,
@@ -3283,6 +3140,8 @@ useEffect(() => {
      MOVE ELEMENT
   ======================================================= */
 
+  const venueBoundary = useMemo(() => parseBoundaryData(venue), [venue]);
+
   function moveItem(
     id: number,
     position: [
@@ -3291,17 +3150,13 @@ useEffect(() => {
       number
     ]
   ) {
-    setItems(
-      current =>
-        current.map(
-          item =>
-            item.id === id
-              ? {
-                  ...item,
-                  position,
-                }
-              : item
-        )
+    setItems(current =>
+      current.map(item => {
+        if (item.id !== id) return item;
+        return isFurnitureInsideBoundary(item, venueBoundary, position, item.rotation)
+          ? { ...item, position }
+          : item;
+      })
     );
   }
 
@@ -3322,14 +3177,12 @@ useEffect(() => {
           item =>
             item.id ===
             selectedId
-              ? {
-                  ...item,
-
-                  rotation:
-                    item.rotation +
-                    Math.PI /
-                      8,
-                }
+              ? (() => {
+                  const nextRotation = item.rotation + Math.PI / 8;
+                  return isFurnitureInsideBoundary(item, venueBoundary, item.position, nextRotation)
+                    ? { ...item, rotation: nextRotation }
+                    : item;
+                })()
               : item
         )
     );
@@ -3654,19 +3507,28 @@ useEffect(() => {
               BUILD PANEL
           ================================================= */}
 
-          {activeNav === "Build" ? (
+          {activeNav ===
+            "Build" && (
             <BuildPanel
-              addItem={addItem}
-              measureMode={measureMode}
-              startMeasurement={startMeasurement}
-              inventory={inventory}
-              inventoryLoading={inventoryLoading}
-            />
-          ) : (
-            <NavigationPanel
-              active={activeNav}
-              venue={venue}
-              items={items}
+              addItem={
+                addItem
+              }
+
+              measureMode={
+                measureMode
+              }
+
+              startMeasurement={
+                startMeasurement
+              }
+
+              inventory={
+                inventory
+              }
+
+              inventoryLoading={
+                inventoryLoading
+              }
             />
           )}
 
@@ -3681,8 +3543,6 @@ useEffect(() => {
               transition: "background 0.3s ease",
             }}
           >
-
-            {viewMode === "3D" && <VenueModelNotice url={venue?.modelUrl || null} />}
 
             <Canvas
               shadows={
@@ -3731,6 +3591,7 @@ useEffect(() => {
               <Floor
                 primaryColor={selectedTheme?.primaryColor || "#2563eb"}
                 secondaryColor={selectedTheme?.secondaryColor || "#f8fafc"}
+                boundary={venueBoundary}
                 onClear={() => {
                   if (
                     !measureMode
@@ -3755,6 +3616,8 @@ useEffect(() => {
                   <Suspense fallback={null}>
                     <VenueModel
                       url={venue.modelUrl}
+                      width={getVenueDimensions(venue).width}
+                      depth={getVenueDimensions(venue).depth}
                     />
                   </Suspense>
                 </ModelErrorBoundary>
@@ -3812,6 +3675,7 @@ useEffect(() => {
                             position
                           )
                       }
+                      boundary={venueBoundary}
                     />
                   ) : (
                     <Furniture2D
@@ -3858,6 +3722,7 @@ useEffect(() => {
                             position
                           )
                       }
+                      boundary={venueBoundary}
                     />
                   )
               )}
@@ -4020,7 +3885,7 @@ useEffect(() => {
                 </span>
 
                 <span>
-                  12m × 12m
+                  {`${getVenueDimensions(venue).width.toFixed(2)}m × ${getVenueDimensions(venue).depth.toFixed(2)}m`}
                 </span>
 
                 <span>
@@ -4517,8 +4382,7 @@ useEffect(() => {
           box-shadow:
             0 2px 7px
             rgba(0, 0, 0, 0.05);
-          pointer-events: auto;
-          z-index: 20;
+          pointer-events: none;
         }
 
         .workspace-title span {
@@ -4559,10 +4423,6 @@ useEffect(() => {
         }
 
         .workspace-theme-action {
-          position: relative;
-          z-index: 21;
-          pointer-events: auto;
-          cursor: pointer;
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -4953,19 +4813,7 @@ useEffect(() => {
                   const primary = theme.primaryColor || "#2563eb";
                   const secondary = theme.secondaryColor || "#f8fafc";
                   return (
-                    <button key={theme.id} type="button" onClick={() => {
-                      setSelectedTheme(theme);
-                      setSelectedThemeId(Number(theme.id));
-                      try {
-                        window.localStorage.setItem(
-                          "wedding-selected-theme-id",
-                          String(theme.id)
-                        );
-                      } catch (err) {
-                        console.warn("Could not store selected theme:", err);
-                      }
-                      setThemeModalOpen(false);
-                    }} style={{ textAlign: "left", border: active ? `3px solid ${primary}` : "1px solid #e2e8f0", borderRadius: "16px", padding: "16px", cursor: "pointer", background: secondary, boxShadow: active ? "0 10px 25px rgba(15, 23, 42, 0.12)" : "none" }}>
+                    <button key={theme.id} type="button" onClick={() => { setSelectedTheme(theme); setSelectedThemeId(theme.id); setThemeModalOpen(false); }} style={{ textAlign: "left", border: active ? `3px solid ${primary}` : "1px solid #e2e8f0", borderRadius: "16px", padding: "16px", cursor: "pointer", background: secondary, boxShadow: active ? "0 10px 25px rgba(15, 23, 42, 0.12)" : "none" }}>
                       <div style={{ width: "100%", height: "8px", borderRadius: "999px", background: primary, marginBottom: "14px" }} />
                       <div style={{ color: "#0f172a", fontWeight: 800, fontSize: "16px" }}>{theme.name}</div>
                       {theme.description && <p style={{ color: "#475569", fontSize: "13px", lineHeight: 1.5, margin: "8px 0" }}>{theme.description}</p>}

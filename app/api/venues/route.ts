@@ -18,7 +18,51 @@ type VenuePayload = {
   availability?: boolean;
   modelUrl?: string | null;
   layoutData?: string | null;
+  width?: number;
+  depth?: number;
+  boundaryData?: string | null;
 };
+
+
+/*
+ * The generated database contract can temporarily lag behind schema changes.
+ * This compatibility type keeps this route type-safe while the Venue table
+ * includes the new real-scale and irregular-boundary fields.
+ */
+type VenueRecord = {
+  id: number;
+  name: string;
+  location: string;
+  capacity: number;
+  type: string;
+  price: number;
+  availability: boolean;
+  modelUrl: string | null;
+  layoutData: string | null;
+  width: number;
+  depth: number;
+  boundaryData: string | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+};
+
+type VenueWriteData = Omit<
+  VenueRecord,
+  "id" | "createdAt" | "updatedAt"
+>;
+
+type VenueStore = {
+  all: () => Promise<VenueRecord[]>;
+  first: (where: { id: number }) => Promise<VenueRecord | null>;
+  create: (data: VenueWriteData) => Promise<VenueRecord>;
+  where: (where: { id: number }) => {
+    update: (data: Partial<VenueWriteData>) => Promise<VenueRecord>;
+    delete: () => Promise<unknown>;
+  };
+};
+
+const venueStore =
+  db.orm.public.Venue as unknown as VenueStore;
 
 function cleanOptionalString(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -65,7 +109,44 @@ function validateVenuePayload(body: VenuePayload): string | null {
     return "Price must be 0 or greater.";
   }
 
+  if (body.width !== undefined && (!Number.isFinite(body.width) || body.width <= 0)) {
+    return "Venue width must be greater than 0.";
+  }
+
+  if (body.depth !== undefined && (!Number.isFinite(body.depth) || body.depth <= 0)) {
+    return "Venue depth must be greater than 0.";
+  }
+
   return null;
+}
+
+function parsePositiveDimension(value: unknown, fieldName: string): number {
+  const numberValue = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numberValue) || numberValue <= 0) {
+    throw new Error(`${fieldName} must be greater than 0.`);
+  }
+  return numberValue;
+}
+
+function normalizeBoundaryData(value: unknown): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  const raw = typeof value === "string" ? JSON.parse(value) : value;
+  if (!Array.isArray(raw) || raw.length < 3) {
+    throw new Error("boundaryData must contain at least three points.");
+  }
+  const points = raw.map((point) => {
+    if (!point || typeof point !== "object") {
+      throw new Error("Each boundary point must contain numeric x and z values.");
+    }
+    const candidate = point as { x?: unknown; z?: unknown };
+    const x = Number(candidate.x);
+    const z = Number(candidate.z);
+    if (!Number.isFinite(x) || !Number.isFinite(z)) {
+      throw new Error("Each boundary point must contain numeric x and z values.");
+    }
+    return { x, z };
+  });
+  return JSON.stringify(points);
 }
 
 function formString(formData: FormData, key: string): string {
@@ -155,6 +236,9 @@ async function parseVenueRequest(request: Request): Promise<{
           true
         ),
         modelUrl: cleanOptionalString(formString(formData, "modelUrl")),
+        width: Number(formString(formData, "width")),
+        depth: Number(formString(formData, "depth")),
+        boundaryData: formString(formData, "boundaryData") || null,
       },
       modelFile: formFile(formData, "model"),
     };
@@ -179,7 +263,11 @@ function errorStatus(message: string): number {
     lowerMessage.includes(".glb") ||
     lowerMessage.includes(".fbx") ||
     lowerMessage.includes(".obj") ||
-    lowerMessage.includes("100 mb")
+    lowerMessage.includes("100 mb") ||
+    lowerMessage.includes("boundarydata") ||
+    lowerMessage.includes("boundary point") ||
+    lowerMessage.includes("venue width") ||
+    lowerMessage.includes("venue depth")
   ) {
     return 400;
   }
@@ -206,7 +294,7 @@ export async function GET(request: Request) {
         );
       }
 
-      const venue = await db.orm.public.Venue.first({ id });
+      const venue = await venueStore.first({ id });
 
       if (!venue) {
         return NextResponse.json(
@@ -220,7 +308,7 @@ export async function GET(request: Request) {
 
     // IMPORTANT:
     // An empty Venue table is a valid state. Always return [] to the page.
-    const venues = await db.orm.public.Venue.all();
+    const venues = await venueStore.all();
 
     return NextResponse.json(Array.isArray(venues) ? venues : []);
   } catch (error) {
@@ -262,7 +350,7 @@ export async function POST(request: Request) {
       modelUrl = await saveModelFile(modelFile);
     }
 
-    const venue = await db.orm.public.Venue.create({
+    const venue = await venueStore.create({
       name: payload.name!.trim(),
       location: payload.location!.trim(),
       capacity: payload.capacity!,
@@ -271,6 +359,15 @@ export async function POST(request: Request) {
       availability: parseBoolean(payload.availability, true),
       modelUrl,
       layoutData: null,
+      width:
+        payload.width === undefined
+          ? 12
+          : parsePositiveDimension(payload.width, "Venue width"),
+      depth:
+        payload.depth === undefined
+          ? 12
+          : parsePositiveDimension(payload.depth, "Venue depth"),
+      boundaryData: normalizeBoundaryData(payload.boundaryData),
     });
 
     return NextResponse.json(venue, { status: 201 });
@@ -306,7 +403,7 @@ export async function PUT(request: Request) {
         );
       }
 
-      const existingVenue = await db.orm.public.Venue.first({ id });
+      const existingVenue = await venueStore.first({ id });
 
       if (!existingVenue) {
         return NextResponse.json(
@@ -327,7 +424,7 @@ export async function PUT(request: Request) {
           );
         }
 
-        const updatedVenue = await db.orm.public.Venue
+        const updatedVenue = await venueStore
           .where({ id })
           .update({
             layoutData: body.layoutData ?? null,
@@ -345,7 +442,7 @@ export async function PUT(request: Request) {
         );
       }
 
-      const updatedVenue = await db.orm.public.Venue
+      const updatedVenue = await venueStore
         .where({ id })
         .update({
           name: body.name!.trim(),
@@ -361,6 +458,11 @@ export async function PUT(request: Request) {
             body.modelUrl === undefined
               ? existingVenue.modelUrl
               : cleanOptionalString(body.modelUrl),
+          width: body.width === undefined ? existingVenue.width : parsePositiveDimension(body.width, "Venue width"),
+          depth: body.depth === undefined ? existingVenue.depth : parsePositiveDimension(body.depth, "Venue depth"),
+          boundaryData: body.boundaryData === undefined
+            ? existingVenue.boundaryData
+            : normalizeBoundaryData(body.boundaryData),
         });
 
       return NextResponse.json(updatedVenue);
@@ -376,7 +478,7 @@ export async function PUT(request: Request) {
       );
     }
 
-    const existingVenue = await db.orm.public.Venue.first({ id });
+    const existingVenue = await venueStore.first({ id });
 
     if (!existingVenue) {
       return NextResponse.json(
@@ -402,7 +504,7 @@ export async function PUT(request: Request) {
       modelUrl = await saveModelFile(modelFile);
     }
 
-    const updatedVenue = await db.orm.public.Venue
+    const updatedVenue = await venueStore
       .where({ id })
       .update({
         name: payload.name!.trim(),
@@ -415,6 +517,11 @@ export async function PUT(request: Request) {
           existingVenue.availability
         ),
         modelUrl,
+        width: payload.width === undefined ? existingVenue.width : parsePositiveDimension(payload.width, "Venue width"),
+        depth: payload.depth === undefined ? existingVenue.depth : parsePositiveDimension(payload.depth, "Venue depth"),
+        boundaryData: payload.boundaryData === undefined
+          ? existingVenue.boundaryData
+          : normalizeBoundaryData(payload.boundaryData),
       });
 
     return NextResponse.json(updatedVenue);
@@ -447,7 +554,7 @@ export async function DELETE(request: Request) {
       );
     }
 
-    const existingVenue = await db.orm.public.Venue.first({ id });
+    const existingVenue = await venueStore.first({ id });
 
     if (!existingVenue) {
       // Treat an already-deleted venue as a completed delete operation.
@@ -456,7 +563,7 @@ export async function DELETE(request: Request) {
       });
     }
 
-    await db.orm.public.Venue.where({ id }).delete();
+    await venueStore.where({ id }).delete();
 
     return NextResponse.json({
       message: "Venue deleted successfully.",

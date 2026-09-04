@@ -10,6 +10,14 @@ model Venue {
   modelUrl     String?
   layoutData   String?
 
+  // Real-world venue dimensions in metres.
+  width        Float    @default(12)
+  depth        Float    @default(12)
+
+  // Optional irregular usable-floor polygon as JSON points.
+  // Example: [{"x": -5, "z": -4}, {"x": 5, "z": -4}, ...]
+  boundaryData String?
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
