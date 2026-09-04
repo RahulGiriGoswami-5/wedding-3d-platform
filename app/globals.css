@@ -3,6 +3,13 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --theme-transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+html[data-theme="dark"] {
+  --background: #101827;
+  --foreground: #e8edf7;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -12,15 +19,261 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  min-height: 100%;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  transition: var(--theme-transition);
+}
+
+.theme-toggle {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid #d7deea;
+  border-radius: 13px;
+  background: #ffffff;
+  color: #31415b;
+  box-shadow: 0 6px 16px rgba(38, 55, 86, 0.08);
+  cursor: pointer;
+  font-size: 19px;
+  line-height: 1;
+  transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.theme-toggle:hover {
+  transform: translateY(-1px);
+  background: #f1f5fb;
+}
+
+.theme-toggle:focus-visible {
+  outline: 3px solid rgba(49, 91, 182, 0.22);
+  outline-offset: 2px;
+}
+
+html[data-theme="dark"] .theme-toggle {
+  background: #1b2638;
+  color: #f7d56a;
+  border-color: #314158;
+}
+
+html[data-theme="dark"] body {
+  background: #101827;
+  color: #e8edf7;
+}
+
+html[data-theme="dark"] .venues-page {
+  background-color: #101827 !important;
+  background-image: radial-gradient(
+    circle,
+    rgba(148, 163, 184, 0.34) 1px,
+    transparent 1.25px
+  ) !important;
+  background-size: 24px 24px !important;
+  color: #e8edf7 !important;
+}
+
+html[data-theme="dark"] .editor {
+  background: #101827 !important;
+  color: #e8edf7 !important;
+}
+
+html[data-theme="dark"] .topbar {
+  background: rgba(17, 24, 39, 0.96) !important;
+  border-color: #2d3a4f !important;
+}
+
+html[data-theme="dark"] .brand-title,
+html[data-theme="dark"] .project-name,
+html[data-theme="dark"] .venue-card h2,
+html[data-theme="dark"] .state-card h2,
+html[data-theme="dark"] .modal-header h2 {
+  color: #edf3ff !important;
+}
+
+html[data-theme="dark"] .brand-subtitle,
+html[data-theme="dark"] .project-small,
+html[data-theme="dark"] .venues-header p,
+html[data-theme="dark"] .summary-row {
+  color: #aebbd0 !important;
+}
+
+html[data-theme="dark"] .main-navigation {
+  background: #182235 !important;
+  border-color: #314158 !important;
+}
+
+html[data-theme="dark"] .top-nav-link {
+  color: #c7d2e5 !important;
+}
+
+html[data-theme="dark"] .top-nav-link:hover,
+html[data-theme="dark"] .top-nav-link.active {
+  background: #263754 !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="dark"] .venue-card,
+html[data-theme="dark"] .state-card,
+html[data-theme="dark"] .venue-modal,
+html[data-theme="dark"] .refresh-button,
+html[data-theme="dark"] .delete-button,
+html[data-theme="dark"] .secondary-button {
+  background: #172235 !important;
+  border-color: #314158 !important;
+  color: #e8edf7 !important;
+}
+
+html[data-theme="dark"] .venue-details strong,
+html[data-theme="dark"] .file-picker strong,
+html[data-theme="dark"] .availability-row strong {
+  color: #e8edf7 !important;
+}
+
+html[data-theme="dark"] .venue-details p,
+html[data-theme="dark"] .model-status,
+html[data-theme="dark"] .upload-help,
+html[data-theme="dark"] .file-picker small,
+html[data-theme="dark"] .availability-row small,
+html[data-theme="dark"] .state-card p {
+  color: #aebbd0 !important;
+}
+
+html[data-theme="dark"] .venue-form input,
+html[data-theme="dark"] .venue-form select,
+html[data-theme="dark"] .close-button,
+html[data-theme="dark"] .file-picker {
+  background: #111a2a !important;
+  color: #e8edf7 !important;
+  border-color: #394963 !important;
+}
+
+html[data-theme="dark"] .modal-header {
+  border-color: #314158 !important;
+}
+
+/* =========================================================
+   DARK DESIGNER WORKSPACE
+   Keep the main 3D editor visually consistent with the
+   dark Venues experience instead of leaving white side panels.
+========================================================= */
+html[data-theme="dark"] .editor .topbar,
+html[data-theme="dark"] .editor .left-nav,
+html[data-theme="dark"] .editor .build-panel,
+html[data-theme="dark"] .editor .properties-panel {
+  background: #172235 !important;
+  border-color: #2f4058 !important;
+  color: #e8edf7 !important;
+}
+
+html[data-theme="dark"] .editor .topbar {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22) !important;
+}
+
+html[data-theme="dark"] .editor .main-navigation,
+html[data-theme="dark"] .editor .view-toggle,
+html[data-theme="dark"] .editor .tip-box,
+html[data-theme="dark"] .editor .selected-card,
+html[data-theme="dark"] .editor .bottom-toolbar {
+  background: #1b2a40 !important;
+  border-color: #344861 !important;
+}
+
+html[data-theme="dark"] .editor .brand-title,
+html[data-theme="dark"] .editor .panel-heading,
+html[data-theme="dark"] .editor .properties-title,
+html[data-theme="dark"] .editor .selected-name,
+html[data-theme="dark"] .editor .empty-title,
+html[data-theme="dark"] .editor .tip-box strong,
+html[data-theme="dark"] .editor .property-row strong,
+html[data-theme="dark"] .editor .workspace-title strong,
+html[data-theme="dark"] .editor .workspace-theme-status-title,
+html[data-theme="dark"] .editor .plan-info span:first-child {
+  color: #f4f7fb !important;
+}
+
+html[data-theme="dark"] .editor .brand-subtitle,
+html[data-theme="dark"] .editor .section-title,
+html[data-theme="dark"] .editor .property-heading,
+html[data-theme="dark"] .editor .property-row span,
+html[data-theme="dark"] .editor .empty-text,
+html[data-theme="dark"] .editor .tip-box,
+html[data-theme="dark"] .editor .selected-type,
+html[data-theme="dark"] .editor .workspace-theme-status-text,
+html[data-theme="dark"] .editor .plan-info {
+  color: #aebbd0 !important;
+}
+
+html[data-theme="dark"] .editor .element-button,
+html[data-theme="dark"] .editor .tool-button {
+  background: #1a2940 !important;
+  border-color: #344861 !important;
+  color: #dce6f5 !important;
+}
+
+html[data-theme="dark"] .editor .element-button:hover,
+html[data-theme="dark"] .editor .tool-button:hover,
+html[data-theme="dark"] .editor .selected-tool,
+html[data-theme="dark"] .editor .nav-item:hover,
+html[data-theme="dark"] .editor .nav-item.active,
+html[data-theme="dark"] .editor .bottom-tool:hover,
+html[data-theme="dark"] .editor .bottom-tool.active {
+  background: #263b59 !important;
+  border-color: #42618a !important;
+  color: #dbeafe !important;
+}
+
+html[data-theme="dark"] .editor .nav-item,
+html[data-theme="dark"] .editor .bottom-tool,
+html[data-theme="dark"] .editor .view-toggle button {
+  color: #b8c5d8 !important;
+}
+
+html[data-theme="dark"] .editor .workspace {
+  background: radial-gradient(circle at 50% 42%, #26354a 0%, #172235 68%) !important;
+}
+
+html[data-theme="dark"] .editor .workspace-title,
+html[data-theme="dark"] .editor .workspace-theme-status,
+html[data-theme="dark"] .editor .plan-info {
+  background: rgba(23, 34, 53, 0.94) !important;
+  border-color: #3a4d67 !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2) !important;
+}
+
+html[data-theme="dark"] .editor .property-section,
+html[data-theme="dark"] .editor .model-status,
+html[data-theme="dark"] .editor .toolbar-divider,
+html[data-theme="dark"] .editor .scale-display {
+  border-color: #31445e !important;
+}
+
+html[data-theme="dark"] .editor .rotate-button {
+  background: #213958 !important;
+  border-color: #3d638f !important;
+  color: #dbeafe !important;
+}
+
+html[data-theme="dark"] .editor .delete-button {
+  background: #3a252c !important;
+  border-color: #6b3945 !important;
+  color: #fecaca !important;
+}
+
+html[data-theme="dark"] .editor .loading {
+  background: #101827 !important;
+  color: #e8edf7 !important;
+}
+
+/* Dark-mode treatment for inline theme selection UI. */
+html[data-theme="dark"] .theme-modal-card {
+  background: #172235 !important;
+  color: #e8edf7 !important;
 }

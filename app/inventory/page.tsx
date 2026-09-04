@@ -53,6 +53,41 @@ const emptyForm = {
   price: "",
 };
 
+function ThemeToggle() {
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem("wedding-planner-theme");
+    const shouldUseDark = savedTheme === "dark";
+
+    setIsDark(shouldUseDark);
+    document.documentElement.dataset.theme = shouldUseDark ? "dark" : "light";
+  }, []);
+
+  function toggleTheme() {
+    const nextIsDark = !isDark;
+
+    setIsDark(nextIsDark);
+    document.documentElement.dataset.theme = nextIsDark ? "dark" : "light";
+
+    window.localStorage.setItem(
+      "wedding-planner-theme",
+      nextIsDark ? "dark" : "light"
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="theme-toggle"
+      onClick={toggleTheme}
+      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+    >
+      <span aria-hidden="true">{isDark ? "☀️" : "🌙"}</span>
+    </button>
+  );
+}
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [search, setSearch] = useState("");
@@ -343,6 +378,7 @@ export default function InventoryPage() {
 
   return (
     <main
+      className="inventory-page"
       style={{
         minHeight: "100vh",
         backgroundColor: "#f8fafc",
@@ -371,6 +407,10 @@ export default function InventoryPage() {
             <Link href="/themes" className="planner-nav-link">Themes</Link>
             <Link href="/designs" className="planner-nav-link">Saved Designs</Link>
           </nav>
+
+          <div className="planner-theme-slot">
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
@@ -657,6 +697,7 @@ export default function InventoryPage() {
                     onClick={() =>
                       setSelectedItem(item)
                     }
+                    className="inventory-item-card"
                     style={{
                       padding: 0,
                       border: "1px solid #e3e6ee",
@@ -672,6 +713,7 @@ export default function InventoryPage() {
                     {/* 3D PREVIEW */}
 
                     <div
+                      className="inventory-item-preview"
                       style={{
                         height: "165px",
                         background:
@@ -684,6 +726,7 @@ export default function InventoryPage() {
                       />
 
                       <div
+                        className="inventory-item-3d-badge"
                         style={{
                           position: "absolute",
                           top: "12px",
@@ -1560,6 +1603,241 @@ export default function InventoryPage() {
           .planner-navigation { min-height: 52px; border-radius: 13px; }
           .planner-nav-link { padding: 9px 11px; font-size: 13px; }
         }
+
+
+        /* =====================================================
+           INVENTORY PAGE - DARK MODE SUPPORT
+           Appearance-only additions. Inventory functionality,
+           API calls, forms, editing and deletion remain intact.
+        ====================================================== */
+
+        .planner-theme-slot {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          min-width: 0;
+        }
+
+
+        html[data-theme="dark"] .inventory-page {
+          background-color: #111827 !important;
+          background-image:
+            radial-gradient(
+              circle at 1px 1px,
+              rgba(203, 213, 225, 0.20) 1px,
+              transparent 1.2px
+            ) !important;
+          color: #e5edf8 !important;
+        }
+
+        html[data-theme="dark"] .inventory-page
+          .planner-navbar {
+          background: rgba(23, 32, 51, 0.98) !important;
+          border-bottom-color: #34435c !important;
+          box-shadow: 0 10px 28px rgba(0, 0, 0, 0.30) !important;
+        }
+
+        html[data-theme="dark"] .inventory-page
+          .planner-brand {
+          color: #f8fafc !important;
+        }
+
+        html[data-theme="dark"] .inventory-page
+          .planner-brand-subtitle {
+          color: #9fb0c9 !important;
+        }
+
+        html[data-theme="dark"] .inventory-page
+          .planner-navigation {
+          background: #202b40 !important;
+          border-color: #34435c !important;
+        }
+
+        html[data-theme="dark"] .inventory-page
+          .planner-nav-link {
+          color: #b8c5d8 !important;
+        }
+
+        html[data-theme="dark"] .inventory-page
+          .planner-nav-link:hover {
+          background: #2b3a54 !important;
+          color: #ffffff !important;
+        }
+
+        html[data-theme="dark"] .inventory-page
+          .planner-nav-active {
+          background: #315a9d !important;
+          color: #ffffff !important;
+        }
+
+
+        /* The Inventory page uses many existing inline styles.
+           These targeted overrides darken their visual containers
+           without changing the underlying React logic. */
+        html[data-theme="dark"] .inventory-page > div:not(.planner-theme-slot),
+        html[data-theme="dark"] .inventory-page section {
+          color: #dbe7f5;
+        }
+
+        html[data-theme="dark"] .inventory-page
+          [style*="background: #ffffff"],
+        html[data-theme="dark"] .inventory-page
+          [style*="background: white"],
+        html[data-theme="dark"] .inventory-page
+          [style*="backgroundColor: #ffffff"],
+        html[data-theme="dark"] .inventory-page
+          [style*="backgroundColor: white"] {
+          background: #172033 !important;
+          background-color: #172033 !important;
+          border-color: #34435c !important;
+        }
+
+        html[data-theme="dark"] .inventory-page
+          [style*="background: #f8fafc"],
+        html[data-theme="dark"] .inventory-page
+          [style*="backgroundColor: #f8fafc"],
+        html[data-theme="dark"] .inventory-page
+          [style*="background: #f1f5f9"],
+        html[data-theme="dark"] .inventory-page
+          [style*="backgroundColor: #f1f5f9"] {
+          background: #1d2940 !important;
+          background-color: #1d2940 !important;
+          border-color: #34435c !important;
+        }
+
+        /* Explicit dark styling for inventory cards and their 3D preview panels. */
+        html[data-theme="dark"] .inventory-page .inventory-item-card {
+          background: #202b40 !important;
+          border-color: #34435c !important;
+          box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28) !important;
+        }
+
+        html[data-theme="dark"] .inventory-page .inventory-item-preview {
+          background: linear-gradient(145deg, #1a2436, #222f46) !important;
+          border-bottom: 1px solid #34435c !important;
+        }
+
+        html[data-theme="dark"] .inventory-page .inventory-item-3d-badge {
+          background: rgba(31, 43, 64, 0.94) !important;
+          color: #c6d3e5 !important;
+          border: 1px solid #3a4b66 !important;
+        }
+
+        html[data-theme="dark"] .inventory-page .inventory-item-card
+          [style*="color: #20283a"],
+        html[data-theme="dark"] .inventory-page .inventory-item-card
+          [style*="color:#20283a"],
+        html[data-theme="dark"] .inventory-page .inventory-item-card
+          [style*="color: #242b3b"],
+        html[data-theme="dark"] .inventory-page .inventory-item-card
+          [style*="color:#242b3b"] {
+          color: #f3f7fc !important;
+        }
+
+        html[data-theme="dark"] .inventory-page .inventory-item-card
+          [style*="color: #7d8596"],
+        html[data-theme="dark"] .inventory-page .inventory-item-card
+          [style*="color:#7d8596"] {
+          color: #9fb0c9 !important;
+        }
+
+        html[data-theme="dark"] .inventory-page
+          input,
+        html[data-theme="dark"] .inventory-page
+          select,
+        html[data-theme="dark"] .inventory-page
+          textarea {
+          background: #111a2a !important;
+          color: #edf3fb !important;
+          border-color: #3a4b66 !important;
+        }
+
+        html[data-theme="dark"] .inventory-page
+          input::placeholder,
+        html[data-theme="dark"] .inventory-page
+          textarea::placeholder {
+          color: #71829b !important;
+        }
+
+        html[data-theme="dark"] .inventory-page
+          [style*="color: #172033"],
+        html[data-theme="dark"] .inventory-page
+          [style*="color:#172033"],
+        html[data-theme="dark"] .inventory-page
+          [style*="color: #173b6d"],
+        html[data-theme="dark"] .inventory-page
+          [style*="color:#173b6d"] {
+          color: #f1f5f9 !important;
+        }
+
+        html[data-theme="dark"] .inventory-page
+          [style*="color: #64748b"],
+        html[data-theme="dark"] .inventory-page
+          [style*="color:#64748b"],
+        html[data-theme="dark"] .inventory-page
+          [style*="color: #94a3b8"],
+        html[data-theme="dark"] .inventory-page
+          [style*="color:#94a3b8"] {
+          color: #9fb0c9 !important;
+        }
+
+        html[data-theme="dark"] .inventory-page
+          [style*="border: 1px solid #e2e8f0"],
+        html[data-theme="dark"] .inventory-page
+          [style*="border:1px solid #e2e8f0"],
+        html[data-theme="dark"] .inventory-page
+          [style*="borderColor: #e2e8f0"] {
+          border-color: #34435c !important;
+        }
+
+        @media (max-width: 1180px) {
+          .planner-navbar-inner {
+            grid-template-columns: 1fr auto;
+          }
+
+          .planner-navigation {
+            grid-column: 1 / -1;
+            grid-row: 2;
+            justify-self: stretch;
+          }
+        }
+
+        @media (max-width: 760px) {
+          .planner-navbar-inner {
+            padding: 10px 14px;
+            grid-template-columns: minmax(0, 1fr) auto;
+          }
+
+          .planner-brand-title {
+            font-size: 16px;
+          }
+
+          .planner-brand-subtitle {
+            font-size: 10px;
+          }
+
+          .planner-brand-mark {
+            width: 42px;
+            height: 42px;
+            font-size: 20px;
+          }
+
+          .theme-toggle {
+            min-height: 38px;
+            padding: 0 10px;
+          }
+
+          .theme-toggle-label {
+            display: none;
+          }
+
+          .planner-navigation {
+            overflow-x: auto;
+            justify-content: flex-start;
+            padding: 5px;
+          }
+        }
+
       `}</style>
 </main>
   );

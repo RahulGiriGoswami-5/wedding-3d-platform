@@ -3,6 +3,41 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+
+function ThemeToggle() {
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem("wedding-planner-theme");
+    const shouldUseDark = savedTheme === "dark";
+
+    setIsDark(shouldUseDark);
+    document.documentElement.dataset.theme = shouldUseDark ? "dark" : "light";
+  }, []);
+
+  function toggleTheme() {
+    const nextIsDark = !isDark;
+    setIsDark(nextIsDark);
+    document.documentElement.dataset.theme = nextIsDark ? "dark" : "light";
+    window.localStorage.setItem(
+      "wedding-planner-theme",
+      nextIsDark ? "dark" : "light"
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="theme-toggle"
+      onClick={toggleTheme}
+      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+    >
+      <span aria-hidden="true">{isDark ? "☀️" : "🌙"}</span>
+    </button>
+  );
+}
+
 type Venue = {
   id: number;
   name: string;
@@ -265,6 +300,8 @@ export default function VenuesPage() {
           <a href="/themes" className="top-nav-link">Themes</a>
           <a href="/designs" className="top-nav-link">Saved Designs</a>
         </nav>
+
+        <ThemeToggle />
       </header>
 
       <section className="venues-header">
@@ -501,16 +538,22 @@ export default function VenuesPage() {
           padding: 0 60px 70px;
           font-family: Arial, Helvetica, sans-serif;
           background-color: #f7f9fc;
-          background-image: radial-gradient(circle, rgba(79, 103, 148, 0.22) 1px, transparent 1.2px);
+          background-image: radial-gradient(circle, rgba(79, 103, 148, 0.38) 1px, transparent 1.25px);
           background-size: 24px 24px;
         }
 
         .topbar {
-          min-height: 108px;
-          margin: 0 -60px 36px;
+          position: relative;
+          left: 50%;
+          width: 100vw;
+          max-width: none;
+          margin: 0 0 36px;
           padding: 14px 60px;
+          transform: translateX(-50%);
+          box-sizing: border-box;
+          min-height: 108px;
           display: grid;
-          grid-template-columns: minmax(230px, 1fr) minmax(640px, 1.85fr) minmax(230px, 1fr);
+          grid-template-columns: minmax(250px, 1fr) minmax(640px, 900px) 1fr;
           align-items: center;
           gap: 28px;
           background: rgba(255, 255, 255, 0.94);
@@ -605,7 +648,46 @@ export default function VenuesPage() {
 
         .topbar::after {
           content: "";
-          min-width: 0;
+          display: none;
+        }
+
+        /* Icon-only theme button kept at the extreme right of the browser window. */
+        .theme-toggle {
+          width: 56px;
+          height: 56px;
+          display: inline-grid;
+          place-items: center;
+          flex: 0 0 56px;
+          margin: 0;
+          padding: 0;
+          border: 1px solid #d4ddea;
+          border-radius: 16px;
+          background: linear-gradient(180deg, #f8fafc, #eef3f9);
+          color: #2f5cad;
+          font-size: 20px;
+          line-height: 1;
+          cursor: pointer;
+          box-shadow: 0 8px 20px rgba(38, 55, 86, 0.08);
+          transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+        }
+
+        .theme-toggle:hover {
+          transform: translateY(-50%) scale(1.04);
+          background: #eef3fb;
+          border-color: #b9c9e3;
+        }
+
+        .theme-toggle:focus-visible {
+          outline: 3px solid rgba(49, 91, 182, 0.24);
+          outline-offset: 3px;
+        }
+
+        .topbar .theme-toggle {
+          position: absolute;
+          right: 24px;
+          top: 50%;
+          transform: translateY(-50%);
+          z-index: 2;
         }
 
         .venues-header {
@@ -701,11 +783,240 @@ export default function VenuesPage() {
         .form-error { border: 1px solid #f1c8c4; background: #fff3f2; color: #ad4841; border-radius: 10px; padding: 13px 15px; font-size: 14px; line-height: 1.45; }
         .modal-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 5px; }
         .secondary-button { border: 1px solid #d5dde8; background: white; color: #526177; border-radius: 10px; padding: 13px 21px; font-weight: 700; cursor: pointer; }
+
+        /* Dark mode: keep the venue page visually consistent with the other sections. */
+        :global(html[data-theme="dark"]) .venues-page {
+          color: #e7edf8;
+          background-color: #151e2d;
+          background-image: radial-gradient(
+            circle,
+            rgba(173, 196, 235, 0.42) 1px,
+            transparent 1.35px
+          );
+          background-size: 24px 24px;
+        }
+
+        :global(html[data-theme="dark"]) .topbar {
+          background: rgba(24, 34, 50, 0.97);
+          border-bottom-color: #2d3d56;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+        }
+
+        :global(html[data-theme="dark"]) .brand-title {
+          color: #eef4ff;
+        }
+
+        :global(html[data-theme="dark"]) .brand-subtitle {
+          color: #aab8cc;
+        }
+
+        :global(html[data-theme="dark"]) .main-navigation {
+          border-color: #3b4d69;
+          background: linear-gradient(180deg, #263248, #202c40);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+
+        :global(html[data-theme="dark"]) .top-nav-link {
+          color: #c7d2e4;
+        }
+
+        :global(html[data-theme="dark"]) .top-nav-link:hover {
+          color: #ffffff;
+          background: #30415d;
+        }
+
+        :global(html[data-theme="dark"]) .top-nav-link.active {
+          color: #ffffff;
+          background: #3b6098;
+          box-shadow: 0 5px 16px rgba(0, 0, 0, 0.24);
+        }
+
+        :global(html[data-theme="dark"]) .theme-toggle {
+          background: #1f2b3f !important;
+          border-color: #3b4d69 !important;
+          color: #f8c45d !important;
+          box-shadow: none !important;
+        }
+
+        :global(html[data-theme="dark"]) .eyebrow {
+          color: #8fa7d0;
+        }
+
+        :global(html[data-theme="dark"]) h1,
+        :global(html[data-theme="dark"]) .venue-card h2,
+        :global(html[data-theme="dark"]) .state-card h2,
+        :global(html[data-theme="dark"]) .modal-header h2 {
+          color: #eef4ff;
+        }
+
+        :global(html[data-theme="dark"]) .venues-header p,
+        :global(html[data-theme="dark"]) .summary-row {
+          color: #aebcd0;
+        }
+
+        :global(html[data-theme="dark"]) .refresh-button,
+        :global(html[data-theme="dark"]) .delete-button,
+        :global(html[data-theme="dark"]) .secondary-button {
+          background: #1d2839;
+          color: #d8e2f0;
+          border-color: #3a4a63;
+        }
+
+        :global(html[data-theme="dark"]) .refresh-button:hover,
+        :global(html[data-theme="dark"]) .secondary-button:hover {
+          background: #26354b;
+        }
+
+        :global(html[data-theme="dark"]) .venue-card,
+        :global(html[data-theme="dark"]) .state-card {
+          background: #202c3e;
+          border-color: #3a4a63;
+          box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+        }
+
+        :global(html[data-theme="dark"]) .venue-card:hover {
+          box-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
+        }
+
+        :global(html[data-theme="dark"]) .venue-type {
+          background: #2a3852;
+          color: #aebfe8;
+        }
+
+        :global(html[data-theme="dark"]) .available {
+          background: #213f37;
+          color: #8ed9b2;
+        }
+
+        :global(html[data-theme="dark"]) .unavailable {
+          background: #472d31;
+          color: #f0a9a2;
+        }
+
+        :global(html[data-theme="dark"]) .venue-details p,
+        :global(html[data-theme="dark"]) .model-status,
+        :global(html[data-theme="dark"]) .layout-not-saved,
+        :global(html[data-theme="dark"]) .state-card p {
+          color: #aebbd0;
+        }
+
+        :global(html[data-theme="dark"]) .venue-details strong {
+          color: #edf3fd;
+        }
+
+        :global(html[data-theme="dark"]) .model-status {
+          border-top-color: #3a4a63;
+          border-bottom-color: #3a4a63;
+        }
+
+        :global(html[data-theme="dark"]) .delete-button {
+          color: #f1aaa3;
+          border-color: #72474a;
+        }
+
+        :global(html[data-theme="dark"]) .state-icon,
+        :global(html[data-theme="dark"]) .empty-icon {
+          background: #293958;
+          color: #9fc1ff;
+        }
+
+        :global(html[data-theme="dark"]) .error-card .state-icon {
+          background: #4a2d31;
+          color: #ffaaa1;
+        }
+
+        :global(html[data-theme="dark"]) .venue-modal {
+          background: #202c3e;
+          color: #e7edf8;
+          border: 1px solid #3a4a63;
+        }
+
+        :global(html[data-theme="dark"]) .modal-header {
+          border-bottom-color: #3a4a63;
+        }
+
+        :global(html[data-theme="dark"]) .modal-header p,
+        :global(html[data-theme="dark"]) .venue-form label,
+        :global(html[data-theme="dark"]) .upload-title {
+          color: #b8c5d8;
+        }
+
+        :global(html[data-theme="dark"]) .close-button {
+          background: #2a3850;
+          color: #d6e0ee;
+        }
+
+        :global(html[data-theme="dark"]) .venue-form input,
+        :global(html[data-theme="dark"]) .venue-form select {
+          background: #182334;
+          color: #e8eef8;
+          border-color: #3a4a63;
+        }
+
+        :global(html[data-theme="dark"]) .venue-form input::placeholder {
+          color: #75849b;
+        }
+
+        :global(html[data-theme="dark"]) .venue-form input:focus,
+        :global(html[data-theme="dark"]) .venue-form select:focus {
+          border-color: #5d89d7;
+          box-shadow: 0 0 0 3px rgba(93, 137, 215, 0.16);
+        }
+
+        :global(html[data-theme="dark"]) .file-picker {
+          background: #1a2638;
+          border-color: #536783;
+        }
+
+        :global(html[data-theme="dark"]) .file-picker:hover {
+          background: #202f45;
+          border-color: #5d89d7;
+        }
+
+        :global(html[data-theme="dark"]) .file-picker strong {
+          color: #e8eef8;
+        }
+
+        :global(html[data-theme="dark"]) .file-picker small,
+        :global(html[data-theme="dark"]) .upload-help,
+        :global(html[data-theme="dark"]) .availability-row small {
+          color: #97a7bd;
+        }
+
+        :global(html[data-theme="dark"]) .file-icon {
+          background: #293a5a;
+          color: #a9c6ff;
+        }
+
+        :global(html[data-theme="dark"]) .availability-row strong {
+          color: #e8eef8;
+        }
+
+        :global(html[data-theme="dark"]) .form-error {
+          background: #42282c;
+          border-color: #6d4448;
+          color: #ffb2aa;
+        }
+
         @media (max-width: 1100px) {
           .topbar {
+            left: 0;
+            width: 100%;
+            transform: none;
             grid-template-columns: 1fr;
             gap: 14px;
             padding: 16px 30px;
+          }
+
+          .topbar .theme-toggle {
+            position: static;
+            justify-self: center;
+            align-self: center;
+            transform: none;
+          }
+
+          .topbar .theme-toggle:hover {
+            transform: scale(1.04);
           }
 
           .topbar::after {
@@ -806,3 +1117,5 @@ export default function VenuesPage() {
     </main>
   );
 }
+
+

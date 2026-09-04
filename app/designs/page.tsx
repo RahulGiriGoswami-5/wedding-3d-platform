@@ -53,6 +53,9 @@ export default function DesignsPage() {
   const [savingEdit, setSavingEdit] =
     useState(false);
 
+  const [darkMode, setDarkMode] =
+    useState(false);
+
   function showMessage(
     text: string,
     type: MessageType = "success"
@@ -137,6 +140,22 @@ export default function DesignsPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem("planner-theme");
+    setDarkMode(savedTheme === "dark");
+  }, []);
+
+  function toggleDarkMode() {
+    setDarkMode(current => {
+      const next = !current;
+      window.localStorage.setItem(
+        "planner-theme",
+        next ? "dark" : "light"
+      );
+      return next;
+    });
+  }
 
   function getVenue(venueId: number) {
     return (
@@ -435,7 +454,7 @@ export default function DesignsPage() {
   }
 
   return (
-    <main className="page">
+    <main className={`page ${darkMode ? "page-dark" : ""}`}>
 
       <header className="planner-navbar">
         <div className="planner-navbar-inner">
@@ -454,47 +473,41 @@ export default function DesignsPage() {
             <Link href="/themes" className="planner-nav-link">Themes</Link>
             <Link href="/designs" className="planner-nav-link planner-nav-active">Saved Designs</Link>
           </nav>
+
+          <button
+            type="button"
+            className="planner-theme-toggle"
+            onClick={toggleDarkMode}
+            aria-label={
+              darkMode
+                ? "Switch to light mode"
+                : "Switch to dark mode"
+            }
+            title={
+              darkMode
+                ? "Switch to light mode"
+                : "Switch to dark mode"
+            }
+          >
+            <span aria-hidden="true">
+              {darkMode ? "☀️" : "🌙"}
+            </span>
+          </button>
         </div>
-      </header>
-
-      
-
-      <header className="header">
-        <div className="brand">
-          <div className="brandMark">
-            W
-          </div>
-
-          <div>
-            <p className="eyebrow">
-              WEDDING PLANNER
-            </p>
-
-            <h1>
-              Saved Designs
-            </h1>
-          </div>
-        </div>
-
-        
       </header>
 
       <section className="hero">
-        <div>
+        <div className="heroCopy">
           <span className="heroTag">
-            DESIGN LIBRARY
+            SAVED DESIGN LIBRARY
           </span>
 
-          <h2>
-            Your wedding designs,
-            ready whenever you are.
-          </h2>
+          <h1>
+            Saved Designs
+          </h1>
 
           <p>
-            Reopen a saved layout, update
-            its details, create an
-            independent copy, or continue
-            designing in the 3D workspace.
+            Reopen, update, duplicate or continue working on your wedding layouts.
           </p>
         </div>
 
@@ -933,19 +946,15 @@ export default function DesignsPage() {
           box-shadow: 0 8px 24px rgba(15,23,42,.06);
         }
         .planner-navbar-inner {
-          width: min(1680px, 100%);
+          width: 100%;
           min-height: 92px;
           margin: 0 auto;
           padding: 10px 26px;
           display: grid;
-          grid-template-columns: 260px minmax(0, 1fr) 260px;
+          grid-template-columns: 260px minmax(0, 1fr) auto;
           align-items: center;
           gap: 18px;
           box-sizing: border-box;
-        }
-        .planner-navbar-inner::after {
-          content: "";
-          min-width: 0;
         }
         .planner-brand {
           min-width: 0;
@@ -1022,14 +1031,47 @@ export default function DesignsPage() {
           color: #2453a2;
           box-shadow: 0 2px 8px rgba(30,64,175,.10), inset 0 1px 0 rgba(255,255,255,.75);
         }
+        .planner-theme-toggle {
+          justify-self: end;
+          min-width: 74px;
+          min-height: 52px;
+          padding: 0 14px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          border: 1px solid #cbd5e1;
+          border-radius: 14px;
+          background: #ffffff;
+          color: #334155;
+          font-size: 13px;
+          font-weight: 800;
+          cursor: pointer;
+          box-shadow: 0 4px 12px rgba(15,23,42,.05);
+          transition: transform .18s ease, border-color .18s ease, background .18s ease;
+        }
+        .planner-theme-toggle:hover {
+          transform: translateY(-1px);
+          border-color: #94a3b8;
+          background: #f8fafc;
+        }
+        .planner-theme-toggle span:first-child {
+          font-size: 17px;
+          line-height: 1;
+        }
         @media (max-width: 1180px) {
           .planner-navbar-inner {
-            grid-template-columns: 240px minmax(0, 1fr);
+            grid-template-columns: 220px minmax(0, 1fr) auto;
             padding: 12px 18px;
+            gap: 12px;
           }
-          .planner-navbar-inner::after { display: none; }
           .planner-navigation { width: 100%; }
           .planner-nav-link { padding: 10px 11px; }
+          .planner-theme-toggle {
+            min-width: 52px;
+            min-height: 52px;
+            padding: 0 12px;
+          }
         }
         @media (max-width: 900px) {
           .planner-navbar-inner {
@@ -1037,6 +1079,9 @@ export default function DesignsPage() {
             min-height: auto;
             flex-wrap: wrap;
             gap: 10px;
+          }
+          .planner-theme-toggle {
+            margin-left: auto;
           }
           .planner-navigation {
             order: 2;
@@ -1169,12 +1214,19 @@ export default function DesignsPage() {
         .page {
           min-height: 100vh;
           padding: 20px;
-          background:
+          background-color: #f8fafc;
+          background-image:
+            radial-gradient(
+              circle,
+              rgba(100, 116, 139, 0.22) 1.15px,
+              transparent 1.25px
+            ),
             linear-gradient(
               180deg,
               #f8fafc 0%,
               #eef2f7 100%
             );
+          background-size: 22px 22px, 100% 100%;
           color: #172033;
           font-family:
             Arial,
@@ -2131,6 +2183,435 @@ export default function DesignsPage() {
           }
         }
 
+
+        /* =====================================================
+           SAVED DESIGNS - COMPACT LAYOUT ENHANCEMENT
+           Presentation-only changes. Existing functionality,
+           API calls, edit, duplicate and delete actions remain.
+        ====================================================== */
+
+        .page {
+          padding: 0 60px 64px;
+          background-color: #f7f9fc;
+          background-image:
+            radial-gradient(circle, rgba(86, 112, 158, 0.20) 1px, transparent 1.2px);
+          background-size: 24px 24px;
+        }
+
+        .hero,
+        .content {
+          max-width: 1500px;
+        }
+
+        .hero {
+          min-height: 170px;
+          margin: 34px auto 30px;
+          padding: 26px 34px;
+          border-radius: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 32px;
+          background:
+            linear-gradient(105deg, #22345f 0%, #315db7 60%, #6943cf 100%);
+          box-shadow: 0 18px 38px rgba(49, 81, 148, 0.18);
+        }
+
+        .heroCopy {
+          min-width: 0;
+          max-width: 760px;
+        }
+
+        .heroTag {
+          margin-bottom: 7px;
+          font-size: 10px;
+          letter-spacing: 1.7px;
+        }
+
+        .hero h1 {
+          margin: 0;
+          font-size: clamp(26px, 3vw, 38px);
+          line-height: 1.1;
+          letter-spacing: -0.7px;
+          color: #ffffff;
+        }
+
+        .hero h2 {
+          display: none;
+        }
+
+        .hero p {
+          max-width: 700px;
+          margin: 9px 0 0;
+          font-size: 15px;
+          line-height: 1.55;
+          color: rgba(255, 255, 255, 0.82);
+        }
+
+        .newDesignButton {
+          flex: 0 0 auto;
+          min-width: 164px;
+          min-height: 52px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0 20px;
+          border-radius: 12px;
+          font-size: 15px;
+          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.15);
+        }
+
+        .content {
+          margin: 0 auto;
+        }
+
+        .sectionHeading {
+          align-items: center;
+          margin-bottom: 20px;
+        }
+
+        .sectionHeading h2 {
+          font-size: 25px;
+          margin: 0;
+        }
+
+        .sectionHeading p {
+          margin-top: 6px;
+          font-size: 14px;
+        }
+
+        .designGrid {
+          grid-template-columns: repeat(auto-fill, minmax(300px, 350px));
+          justify-content: start;
+          align-items: start;
+          gap: 20px;
+        }
+
+        .designCard {
+          border-radius: 16px;
+          box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+        }
+
+        .designCard:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 16px 34px rgba(15, 23, 42, 0.10);
+        }
+
+        .designPreview {
+          height: 118px;
+          padding: 14px;
+        }
+
+        .previewBadge {
+          padding: 5px 8px;
+          font-size: 9px;
+        }
+
+        .designId {
+          font-size: 11px;
+        }
+
+        .previewText {
+          gap: 3px;
+        }
+
+        .previewText strong {
+          font-size: 19px;
+        }
+
+        .designContent {
+          padding: 16px;
+        }
+
+        .designTitleRow {
+          margin-bottom: 14px;
+          gap: 10px;
+        }
+
+        .designTitleRow h3 {
+          font-size: 18px;
+        }
+
+        .designTitleRow p {
+          margin-top: 5px;
+          font-size: 11px;
+        }
+
+        .editIconButton {
+          width: 34px;
+          height: 34px;
+          border-radius: 9px;
+          font-size: 15px;
+        }
+
+        .infoGrid {
+          gap: 9px;
+          margin-bottom: 14px;
+        }
+
+        .infoBox {
+          padding: 10px;
+          border-radius: 10px;
+        }
+
+        .infoLabel {
+          margin-bottom: 5px;
+          font-size: 9px;
+        }
+
+        .infoBox strong {
+          font-size: 12px;
+        }
+
+        .infoBox small {
+          font-size: 11px;
+        }
+
+        .cardActions {
+          gap: 7px;
+        }
+
+        .actionButton {
+          min-height: 39px;
+          padding: 7px 8px;
+          border-radius: 8px;
+          font-size: 11px;
+        }
+
+        .deleteButton {
+          min-height: 38px;
+          margin-top: 8px;
+          padding: 8px;
+          border-radius: 8px;
+          font-size: 12px;
+        }
+
+        @media (max-width: 1100px) {
+          .page {
+            padding-left: 30px;
+            padding-right: 30px;
+          }
+
+          .hero {
+            margin-top: 28px;
+          }
+        }
+
+        @media (max-width: 720px) {
+          .page {
+            padding: 0 18px 48px;
+          }
+
+          .hero {
+            min-height: auto;
+            margin-top: 22px;
+            margin-bottom: 24px;
+            padding: 24px;
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 18px;
+          }
+
+          .hero h1 {
+            font-size: 29px;
+          }
+
+          .newDesignButton {
+            width: 100%;
+          }
+
+          .sectionHeading {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+
+          .headingActions {
+            width: 100%;
+            justify-content: space-between;
+          }
+
+          .designGrid {
+            grid-template-columns: 1fr;
+          }
+
+          .cardActions {
+            grid-template-columns: 1fr;
+          }
+        }
+
+
+        /* =====================================================
+           PAGE DARK MODE
+        ====================================================== */
+        .page-dark {
+          background-color: #131c2b;
+          background-image:
+            radial-gradient(
+              circle,
+              rgba(148, 163, 184, 0.38) 1.15px,
+              transparent 1.25px
+            ),
+            linear-gradient(
+              180deg,
+              #172131 0%,
+              #101827 100%
+            );
+          background-size: 22px 22px, 100% 100%;
+          color: #e5edf8;
+        }
+
+        .page-dark .planner-navbar {
+          background: rgba(22, 32, 48, .98);
+          border-bottom-color: #2d4059;
+          box-shadow: 0 8px 24px rgba(0,0,0,.18);
+        }
+        .page-dark .planner-brand {
+          color: #f1f5f9;
+        }
+        .page-dark .planner-brand-subtitle {
+          color: #aebed2;
+        }
+        .page-dark .planner-navigation {
+          border-color: #3b4d67;
+          background: linear-gradient(
+            180deg,
+            rgba(39, 53, 75, .96),
+            rgba(30, 42, 61, .96)
+          );
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+        }
+        .page-dark .planner-nav-link {
+          color: #c8d4e3;
+        }
+        .page-dark .planner-nav-link:hover {
+          background: #31445f;
+          color: #ffffff;
+        }
+        .page-dark .planner-nav-active {
+          background: linear-gradient(180deg,#3f6192,#31537f);
+          color: #ffffff;
+          box-shadow: 0 6px 14px rgba(0,0,0,.18);
+        }
+        .page-dark .planner-theme-toggle {
+          border-color: #3b4d67;
+          background: #202d40;
+          color: #eef5ff;
+          box-shadow: none;
+        }
+        .page-dark .planner-theme-toggle:hover {
+          border-color: #5a7090;
+          background: #2a3a51;
+        }
+
+        .page-dark .sectionHeading h2,
+        .page-dark .sectionHeading p,
+        .page-dark .designContent h3,
+        .page-dark .designContent strong,
+        .page-dark .emptyState h3,
+        .page-dark .stateCard p {
+          color: #edf3fb;
+        }
+
+        .page-dark .sectionHeading > div > p,
+        .page-dark .designTitleRow p,
+        .page-dark .infoBox small,
+        .page-dark .emptyState p {
+          color: #aebed2;
+        }
+
+        .page-dark .designCount,
+        .page-dark .refreshButton,
+        .page-dark .editIconButton {
+          background: #202d40;
+          color: #dce7f5;
+          border-color: #3a4c66;
+        }
+
+        .page-dark .refreshButton:hover,
+        .page-dark .editIconButton:hover {
+          background: #2a3a51;
+          border-color: #58708f;
+        }
+
+        .page-dark .designCard,
+        .page-dark .stateCard,
+        .page-dark .emptyState,
+        .page-dark .modal {
+          background: #202b3d;
+          border-color: #3a4c66;
+          box-shadow: 0 14px 34px rgba(0,0,0,.24);
+        }
+
+        .page-dark .designCard:hover {
+          box-shadow: 0 22px 45px rgba(0,0,0,.34);
+        }
+
+        .page-dark .designContent {
+          background: #202b3d;
+        }
+
+        .page-dark .infoBox,
+        .page-dark .modalDetails > div {
+          background: #192434;
+          border-color: #35465f;
+        }
+
+        .page-dark .infoLabel,
+        .page-dark .modalDetails span,
+        .page-dark .modalTag {
+          color: #8fa8c7;
+        }
+
+        .page-dark .secondaryButton,
+        .page-dark .duplicateButton,
+        .page-dark .cancelButton {
+          background: #202d40;
+          color: #dce7f5;
+          border-color: #41536d;
+        }
+
+        .page-dark .secondaryButton:hover,
+        .page-dark .duplicateButton:hover,
+        .page-dark .cancelButton:hover {
+          background: #2b3b53;
+          border-color: #5b7190;
+        }
+
+        .page-dark .deleteButton {
+          background: #2b2229;
+          color: #fecaca;
+          border-color: #6a4049;
+        }
+
+        .page-dark .message {
+          background: #193d35;
+          border-color: #2f685b;
+          color: #d9fff5;
+        }
+
+        .page-dark .errorMessage {
+          background: #42252a;
+          border-color: #74434b;
+          color: #fee2e2;
+        }
+
+        .page-dark .modalOverlay {
+          background: rgba(3, 8, 18, .72);
+        }
+
+        .page-dark .modal input {
+          background: #172131;
+          color: #edf3fb;
+          border-color: #3a4c66;
+        }
+
+        .page-dark .modalHeader {
+          border-bottom-color: #35465f;
+        }
+
+        .page-dark .modalActions {
+          border-top-color: #35465f;
+        }
       `}</style>
 
     </main>

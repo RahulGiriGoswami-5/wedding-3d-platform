@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 type Venue = {
@@ -63,6 +63,20 @@ export default function MatchPage() {
   const [result, setResult] = useState<MatchResult | null>(null);
   const [selectedVenueId, setSelectedVenueId] = useState<number | null>(null);
   const [selectedInventoryIds, setSelectedInventoryIds] = useState<number[]>([]);
+
+  const [darkMode, setDarkMode] = useState(false);
+
+  useEffect(() => {
+    const savedMode = window.localStorage.getItem("planner-color-mode");
+    setDarkMode(savedMode === "dark");
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      "planner-color-mode",
+      darkMode ? "dark" : "light"
+    );
+  }, [darkMode]);
 
   const venues = result?.recommendations?.venues ?? [];
   const inventoryItems = result?.recommendations?.inventory ?? [];
@@ -174,7 +188,7 @@ export default function MatchPage() {
   }
 
   return (
-    <main className="match-page">
+    <main className={`match-page${darkMode ? " dark-mode" : ""}`}>
 
       <header className="planner-navbar">
         <div className="planner-navbar-inner">
@@ -193,6 +207,17 @@ export default function MatchPage() {
             <Link href="/themes" className="planner-nav-link">Themes</Link>
             <Link href="/designs" className="planner-nav-link">Saved Designs</Link>
           </nav>
+
+          <button
+            type="button"
+            className="planner-theme-toggle"
+            onClick={() => setDarkMode((current) => !current)}
+            aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+            aria-pressed={darkMode}
+            title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {darkMode ? "☀" : "☾"}
+          </button>
         </div>
       </header>
 
@@ -1219,6 +1244,285 @@ export default function MatchPage() {
             grid-template-columns: 1fr;
           }
         }
+
+        /* =====================================================
+           DARK MODE + SHARED NAVIGATION
+           ===================================================== */
+        .planner-navbar-inner {
+          width: 100%;
+          max-width: none;
+          grid-template-columns: minmax(260px, 1fr) auto minmax(260px, 1fr);
+        }
+
+        .planner-navbar-inner::after {
+          display: none;
+        }
+
+        .planner-brand {
+          justify-self: start;
+        }
+
+        .planner-navigation {
+          justify-self: center;
+          width: max-content;
+          max-width: 100%;
+        }
+
+        .planner-theme-toggle {
+          justify-self: end;
+          width: 56px;
+          height: 56px;
+          display: grid;
+          place-items: center;
+          padding: 0;
+          border: 1px solid #cbd5e1;
+          border-radius: 16px;
+          background: linear-gradient(180deg, #ffffff, #f1f5f9);
+          color: #334155;
+          font-size: 22px;
+          line-height: 1;
+          cursor: pointer;
+          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+          transition: transform .18s ease, background .18s ease, border-color .18s ease;
+        }
+
+        .planner-theme-toggle:hover {
+          transform: translateY(-1px);
+          border-color: #93c5fd;
+          background: #eff6ff;
+        }
+
+        .dark-mode {
+          color: #e5edf8;
+          background-color: #121a28 !important;
+          background-image:
+            radial-gradient(
+              circle at 1px 1px,
+              rgba(203, 213, 225, 0.38) 1px,
+              transparent 1.25px
+            ) !important;
+          background-size: 20px 20px !important;
+        }
+
+        .dark-mode .planner-navbar {
+          background: rgba(28, 39, 57, 0.97);
+          border-bottom-color: #334155;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+        }
+
+        .dark-mode .planner-brand,
+        .dark-mode .planner-brand-title {
+          color: #f8fafc;
+        }
+
+        .dark-mode .planner-brand-subtitle {
+          color: #aebed1;
+        }
+
+        .dark-mode .planner-navigation {
+          border-color: #40516a;
+          background: linear-gradient(180deg, #26344a, #202c3f);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+        }
+
+        .dark-mode .planner-nav-link {
+          color: #cbd5e1;
+        }
+
+        .dark-mode .planner-nav-link:hover {
+          color: #ffffff;
+          background: #34445d;
+        }
+
+        .dark-mode .planner-nav-active {
+          color: #ffffff;
+          background: linear-gradient(180deg, #42689c, #31527f);
+          box-shadow: 0 4px 12px rgba(0,0,0,.18);
+        }
+
+        .dark-mode .planner-theme-toggle {
+          color: #fbbf24;
+          border-color: #40516a;
+          background: linear-gradient(180deg, #26344a, #202c3f);
+          box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
+        }
+
+        .dark-mode .planner-theme-toggle:hover {
+          background: #30415a;
+          border-color: #64748b;
+        }
+
+        /* Match page cards and controls */
+        .dark-mode .requirements-card,
+        .dark-mode .result-section,
+        .dark-mode .summary-card,
+        .dark-mode .empty-results,
+        .dark-mode .error-card,
+        .dark-mode .design-action-card,
+        .dark-mode .venue-card,
+        .dark-mode .inventory-card {
+          background: #202c3f !important;
+          border-color: #40516a !important;
+          color: #e5edf8 !important;
+          box-shadow: 0 10px 28px rgba(0,0,0,.18);
+        }
+
+        .dark-mode .venue-card.selected,
+        .dark-mode .inventory-card.selected {
+          background: #263a57 !important;
+          border-color: #4f8df7 !important;
+        }
+
+        .dark-mode .info-box,
+        .dark-mode .result-count,
+        .dark-mode .empty-icon {
+          background: #263a57 !important;
+          border-color: #40516a !important;
+        }
+
+        .dark-mode input,
+        .dark-mode textarea,
+        .dark-mode select {
+          background: #182334 !important;
+          border-color: #40516a !important;
+          color: #e5edf8 !important;
+        }
+
+        .dark-mode option {
+          background: #182334;
+          color: #e5edf8;
+        }
+
+        .dark-mode .page-heading h1,
+        .dark-mode h1,
+        .dark-mode h2,
+        .dark-mode h3,
+        .dark-mode .section-heading h2,
+        .dark-mode .result-title h2,
+        .dark-mode .venue-name-row h3,
+        .dark-mode .empty-results h2,
+        .dark-mode .themeContent h3,
+        .dark-mode .designTitleRow h3 {
+          color: #f8fafc !important;
+        }
+
+        .dark-mode p,
+        .dark-mode .subtitle,
+        .dark-mode .section-heading p,
+        .dark-mode .result-title p,
+        .dark-mode .venue-location,
+        .dark-mode .venue-info,
+        .dark-mode .inventory-bottom,
+        .dark-mode .empty-results p,
+        .dark-mode .info-box p,
+        .dark-mode .themeContent p,
+        .dark-mode .message {
+          color: #aebed1 !important;
+        }
+
+        .dark-mode label,
+        .dark-mode .infoLabel,
+        .dark-mode .designId {
+          color: #cbd5e1 !important;
+        }
+
+        /* Themes page cards */
+        .dark-mode .formCard,
+        .dark-mode .themesSection,
+        .dark-mode .themeCard,
+        .dark-mode .emptyState {
+          background: #202c3f !important;
+          border-color: #40516a !important;
+          color: #e5edf8 !important;
+          box-shadow: 0 10px 28px rgba(0,0,0,.18);
+        }
+
+        .dark-mode .secondaryButton {
+          background: #2b3a50 !important;
+          color: #e5edf8 !important;
+          border-color: #40516a !important;
+        }
+
+        .dark-mode .styleTag {
+          background: #263a57 !important;
+          color: #bfdbfe !important;
+        }
+
+        .dark-mode .colorInfo {
+          color: #cbd5e1 !important;
+        }
+
+        /* Saved designs cards and modal */
+        .dark-mode .hero,
+        .dark-mode .designCard,
+        .dark-mode .emptyState,
+        .dark-mode .stateCard,
+        .dark-mode .modal,
+        .dark-mode .infoBox {
+          background: #202c3f !important;
+          border-color: #40516a !important;
+          color: #e5edf8 !important;
+          box-shadow: 0 10px 28px rgba(0,0,0,.18);
+        }
+
+        .dark-mode .designPreview,
+        .dark-mode .previewTop,
+        .dark-mode .previewText,
+        .dark-mode .infoGrid > div,
+        .dark-mode .modalDetails {
+          background-color: #182334 !important;
+          border-color: #40516a !important;
+        }
+
+        .dark-mode .refreshButton,
+        .dark-mode .secondaryButton,
+        .dark-mode .actionButton.secondaryButton,
+        .dark-mode .cancelButton,
+        .dark-mode .closeButton,
+        .dark-mode .editIconButton {
+          background: #26344a !important;
+          color: #e5edf8 !important;
+          border-color: #40516a !important;
+        }
+
+        .dark-mode .modalOverlay {
+          background: rgba(3, 7, 18, 0.72) !important;
+        }
+
+        @media (max-width: 1180px) {
+          .planner-navbar-inner {
+            grid-template-columns: minmax(220px, 1fr) minmax(0, 1fr) 72px;
+          }
+
+          .planner-navigation {
+            width: 100%;
+          }
+
+          .planner-theme-toggle {
+            width: 52px;
+            height: 52px;
+          }
+        }
+
+        @media (max-width: 900px) {
+          .planner-navbar-inner {
+            display: grid;
+            grid-template-columns: 1fr auto;
+          }
+
+          .planner-navigation {
+            grid-column: 1 / -1;
+            grid-row: 2;
+            justify-self: stretch;
+            width: 100%;
+          }
+
+          .planner-theme-toggle {
+            grid-column: 2;
+            grid-row: 1;
+          }
+        }
+
       `}</style>
     </main>
   );
