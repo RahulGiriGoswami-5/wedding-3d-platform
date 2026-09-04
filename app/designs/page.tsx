@@ -437,6 +437,28 @@ export default function DesignsPage() {
   return (
     <main className="page">
 
+      <header className="planner-navbar">
+        <div className="planner-navbar-inner">
+          <Link href="/" className="planner-brand" aria-label="Wedding Planner home">
+            <span className="planner-brand-mark">W</span>
+            <span>
+              <span className="planner-brand-title">Wedding Planner</span>
+              <span className="planner-brand-subtitle">3D Venue Designer</span>
+            </span>
+          </Link>
+          <nav className="planner-navigation" aria-label="Main navigation">
+            <Link href="/" className="planner-nav-link">Designer</Link>
+            <Link href="/venues" className="planner-nav-link">Venues</Link>
+            <Link href="/inventory" className="planner-nav-link">Inventory</Link>
+            <Link href="/match" className="planner-nav-link">Find Matches</Link>
+            <Link href="/themes" className="planner-nav-link">Themes</Link>
+            <Link href="/designs" className="planner-nav-link planner-nav-active">Saved Designs</Link>
+          </nav>
+        </div>
+      </header>
+
+      
+
       <header className="header">
         <div className="brand">
           <div className="brandMark">
@@ -454,30 +476,7 @@ export default function DesignsPage() {
           </div>
         </div>
 
-        <nav className="navigation">
-          <Link href="/">
-            Designer
-          </Link>
-
-          <Link href="/venues">
-            Venues
-          </Link>
-
-          <Link href="/inventory">
-            Inventory
-          </Link>
-
-          <Link href="/themes">
-            Themes
-          </Link>
-
-          <Link
-            href="/designs"
-            className="activeNav"
-          >
-            Saved Designs
-          </Link>
-        </nav>
+        
       </header>
 
       <section className="hero">
@@ -921,7 +920,247 @@ export default function DesignsPage() {
 
       )}
 
-      <style jsx>{`
+      <style>{`
+        /* Shared Wedding Planner navigation - enhanced */
+        .planner-navbar {
+          position: sticky;
+          top: 0;
+          z-index: 1000;
+          width: 100%;
+          background: rgba(255,255,255,.97);
+          border-bottom: 1px solid #dbe3ef;
+          backdrop-filter: blur(16px);
+          box-shadow: 0 8px 24px rgba(15,23,42,.06);
+        }
+        .planner-navbar-inner {
+          width: min(1680px, 100%);
+          min-height: 92px;
+          margin: 0 auto;
+          padding: 10px 26px;
+          display: grid;
+          grid-template-columns: 260px minmax(0, 1fr) 260px;
+          align-items: center;
+          gap: 18px;
+          box-sizing: border-box;
+        }
+        .planner-navbar-inner::after {
+          content: "";
+          min-width: 0;
+        }
+        .planner-brand {
+          min-width: 0;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          color: #243247;
+          text-decoration: none;
+          width: max-content;
+          max-width: 100%;
+        }
+        .planner-brand-mark {
+          width: 50px;
+          height: 50px;
+          border-radius: 12px;
+          display: grid;
+          place-items: center;
+          flex: 0 0 auto;
+          background: linear-gradient(135deg,#2f66c8,#1d4fa8);
+          color: #fff;
+          font-size: 24px;
+          font-weight: 800;
+          box-shadow: 0 8px 18px rgba(37,99,235,.22);
+        }
+        .planner-brand-title {
+          display: block;
+          font-size: 20px;
+          font-weight: 800;
+          letter-spacing: .02em;
+          line-height: 1.15;
+          white-space: nowrap;
+        }
+        .planner-brand-subtitle {
+          display: block;
+          margin-top: 4px;
+          color: #64748b;
+          font-size: 12px;
+          font-weight: 600;
+          white-space: nowrap;
+        }
+        .planner-navigation {
+          min-height: 60px;
+          width: min(100%, 980px);
+          margin: 0 auto;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          padding: 6px;
+          box-sizing: border-box;
+          border: 1px solid #d7dee9;
+          border-radius: 16px;
+          background: linear-gradient(180deg, rgba(248,250,252,.96), rgba(241,245,249,.9));
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 4px 12px rgba(15,23,42,.035);
+        }
+        .planner-nav-link {
+          padding: 10px 14px;
+          border-radius: 10px;
+          color: #3d4a5c;
+          text-decoration: none;
+          font-size: 14px;
+          font-weight: 700;
+          line-height: 1;
+          white-space: nowrap;
+          transition: background .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease;
+        }
+        .planner-nav-link:hover {
+          background: #e8eef8;
+          color: #2453a2;
+          transform: translateY(-1px);
+        }
+        .planner-nav-active {
+          background: linear-gradient(180deg,#dce8f9,#d5e2f5);
+          color: #2453a2;
+          box-shadow: 0 2px 8px rgba(30,64,175,.10), inset 0 1px 0 rgba(255,255,255,.75);
+        }
+        @media (max-width: 1180px) {
+          .planner-navbar-inner {
+            grid-template-columns: 240px minmax(0, 1fr);
+            padding: 12px 18px;
+          }
+          .planner-navbar-inner::after { display: none; }
+          .planner-navigation { width: 100%; }
+          .planner-nav-link { padding: 10px 11px; }
+        }
+        @media (max-width: 900px) {
+          .planner-navbar-inner {
+            display: flex;
+            min-height: auto;
+            flex-wrap: wrap;
+            gap: 10px;
+          }
+          .planner-navigation {
+            order: 2;
+            flex-basis: 100%;
+            justify-content: flex-start;
+            overflow-x: auto;
+            scrollbar-width: none;
+          }
+          .planner-navigation::-webkit-scrollbar { display: none; }
+        }
+        @media (max-width: 620px) {
+          .planner-navbar-inner { padding: 10px 12px; }
+          .planner-brand-mark { width: 42px; height: 42px; font-size: 20px; border-radius: 10px; }
+          .planner-brand-title { font-size: 17px; }
+          .planner-brand-subtitle { font-size: 10px; }
+          .planner-navigation { min-height: 52px; border-radius: 13px; }
+          .planner-nav-link { padding: 9px 11px; font-size: 13px; }
+        }
+
+        .wp-navbar {
+          position: sticky;
+          top: 0;
+          z-index: 1000;
+          width: 100%;
+          background: rgba(255, 255, 255, 0.96);
+          border-bottom: 1px solid #e2e8f0;
+          backdrop-filter: blur(12px);
+          box-shadow: 0 4px 18px rgba(15, 23, 42, 0.05);
+        }
+
+        .wp-nav-inner {
+          max-width: 1500px;
+          min-height: 62px;
+          margin: 0 auto;
+          padding: 0 24px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+        }
+
+        .wp-brand {
+          display: inline-flex;
+          align-items: center;
+          gap: 9px;
+          color: #173b6d;
+          font-size: 15px;
+          font-weight: 800;
+          text-decoration: none;
+          white-space: nowrap;
+        }
+
+        .wp-brand-mark {
+          width: 30px;
+          height: 30px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 9px;
+          background: #2563eb;
+          color: #fff;
+          font-size: 14px;
+          box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
+        }
+
+        .wp-nav-links {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          overflow-x: auto;
+          padding: 8px 0;
+          scrollbar-width: none;
+        }
+
+        .wp-nav-links::-webkit-scrollbar {
+          display: none;
+        }
+
+        .wp-nav-link {
+          flex: 0 0 auto;
+          padding: 8px 11px;
+          border-radius: 8px;
+          color: #64748b;
+          font-size: 12px;
+          font-weight: 700;
+          text-decoration: none;
+          transition: background .2s ease, color .2s ease;
+        }
+
+        .wp-nav-link:hover {
+          background: #eff6ff;
+          color: #2563eb;
+        }
+
+        .wp-nav-link.wp-active {
+          background: #eaf2ff;
+          color: #2563eb;
+        }
+
+        @media (max-width: 900px) {
+          .wp-nav-inner {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 4px;
+            padding-top: 9px;
+            padding-bottom: 8px;
+          }
+
+          .wp-nav-links {
+            width: 100%;
+          }
+        }
+
+        @media (max-width: 520px) {
+          .wp-nav-inner {
+            padding-left: 14px;
+            padding-right: 14px;
+          }
+
+          .wp-brand {
+            font-size: 14px;
+          }
+        }
+
 
         * {
           box-sizing: border-box;
@@ -929,7 +1168,7 @@ export default function DesignsPage() {
 
         .page {
           min-height: 100vh;
-          padding: 28px;
+          padding: 20px;
           background:
             linear-gradient(
               180deg,
@@ -1231,7 +1470,7 @@ export default function DesignsPage() {
                 1fr
               )
             );
-          gap: 24px;
+          gap: 16px;
         }
 
         .designCard {
@@ -1826,7 +2065,7 @@ export default function DesignsPage() {
           }
 
           .hero {
-            padding: 28px;
+            padding: 20px;
           }
 
           .hero h2 {

@@ -13,9 +13,6 @@ type Venue = {
   availability: boolean;
   modelUrl: string | null;
   layoutData?: string | null;
-  width: number;
-  depth: number;
-  boundaryData?: string | null;
 };
 
 type VenueFormState = {
@@ -24,9 +21,6 @@ type VenueFormState = {
   capacity: string;
   type: string;
   price: string;
-  width: string;
-  depth: string;
-  boundaryData: string;
   availability: boolean;
 };
 
@@ -36,9 +30,6 @@ const EMPTY_FORM: VenueFormState = {
   capacity: "",
   type: "",
   price: "",
-  width: "12",
-  depth: "12",
-  boundaryData: "",
   availability: true,
 };
 
@@ -54,9 +45,13 @@ function formatPrice(price: number) {
 }
 
 function getApiError(data: unknown, fallback: string) {
-  if (data && typeof data === "object" && "error" in data) {
-    const error = (data as { error?: unknown }).error;
-    if (typeof error === "string" && error.trim()) return error;
+  if (
+    data &&
+    typeof data === "object" &&
+    "error" in data &&
+    typeof (data as { error?: unknown }).error === "string"
+  ) {
+    return (data as { error: string }).error;
   }
   return fallback;
 }
@@ -65,49 +60,40 @@ export default function VenuesPage() {
   const router = useRouter();
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<VenueFormState>(EMPTY_FORM);
   const [modelFile, setModelFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
-  const [pageError, setPageError] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const loadVenues = useCallback(async () => {
-    setLoading(true);
-    setPageError("");
-
     try {
+      setLoading(true);
+      setPageError("");
+
       const response = await fetch("/api/venues", {
         cache: "no-store",
-        headers: { Accept: "application/json" },
       });
 
-      // The venue page must never crash merely because the database is empty
-      // or an old/deleted venue record makes the API temporarily unavailable.
-      if (!response.ok) {
-        setVenues([]);
-        setPageError("Could not refresh venues right now. Please try again.");
-        return;
-      }
-
       const contentType = response.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) {
-        setVenues([]);
-        setPageError("The venues service returned an invalid response. Please try again.");
-        return;
+      const data = contentType.includes("application/json")
+        ? await response.json()
+        : null;
+
+      if (!response.ok) {
+        throw new Error(getApiError(data, "Failed to load venues."));
       }
 
-      const data: unknown = await response.json();
-
-      // An empty database is valid. Only arrays are accepted as venue lists.
+      // An empty database is valid and must never be treated as an error.
       setVenues(Array.isArray(data) ? (data as Venue[]) : []);
-    } catch {
-      // Do not throw or call console.error here. In Next.js development mode,
-      // console errors can trigger the full-screen error overlay. If the API is
-      // temporarily unavailable, keep the page usable and show an empty list.
+    } catch (error) {
+      console.error("Failed to fetch venues:", error);
       setVenues([]);
-      setPageError("Could not connect to the venues service. Please try again.");
+      setPageError(
+        error instanceof Error ? error.message : "Failed to load venues."
+      );
     } finally {
       setLoading(false);
     }
@@ -173,8 +159,6 @@ export default function VenuesPage() {
 
     const capacity = Number(form.capacity);
     const price = Number(form.price);
-    const width = Number(form.width);
-    const depth = Number(form.depth);
 
     if (!Number.isFinite(capacity) || capacity <= 0) {
       setFormError("Please enter a valid capacity greater than 0.");
@@ -186,21 +170,6 @@ export default function VenuesPage() {
       return;
     }
 
-    if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(depth) || depth <= 0) {
-      setFormError("Please enter valid venue width and depth in metres.");
-      return;
-    }
-
-    if (form.boundaryData.trim()) {
-      try {
-        const boundary = JSON.parse(form.boundaryData);
-        if (!Array.isArray(boundary) || boundary.length < 3) throw new Error();
-      } catch {
-        setFormError('Boundary points must be valid JSON with at least 3 points, for example [{"x":-5,"z":-4},{"x":5,"z":-4},{"x":0,"z":4}].');
-        return;
-      }
-    }
-
     try {
       setSubmitting(true);
 
@@ -210,9 +179,6 @@ export default function VenuesPage() {
       body.append("capacity", String(capacity));
       body.append("type", form.type.trim());
       body.append("price", String(price));
-      body.append("width", String(width));
-      body.append("depth", String(depth));
-      body.append("boundaryData", form.boundaryData.trim());
       body.append("availability", String(form.availability));
 
       if (modelFile) {
@@ -282,6 +248,25 @@ export default function VenuesPage() {
 
   return (
     <main className="venues-page">
+      <header className="topbar">
+        <a href="/" className="brand" aria-label="Wedding Planner home">
+          <div className="brand-icon">W</div>
+          <div className="brand-copy">
+            <div className="brand-title">Wedding Planner</div>
+            <div className="brand-subtitle">3D Venue Designer</div>
+          </div>
+        </a>
+
+        <nav className="main-navigation" aria-label="Main navigation">
+          <a href="/" className="top-nav-link">Designer</a>
+          <a href="/venues" className="top-nav-link active" aria-current="page">Venues</a>
+          <a href="/inventory" className="top-nav-link">Inventory</a>
+          <a href="/match" className="top-nav-link">Find Matches</a>
+          <a href="/themes" className="top-nav-link">Themes</a>
+          <a href="/designs" className="top-nav-link">Saved Designs</a>
+        </nav>
+      </header>
+
       <section className="venues-header">
         <div>
           <span className="eyebrow">VENUE MANAGEMENT</span>
@@ -306,17 +291,20 @@ export default function VenuesPage() {
         </button>
       </div>
 
-      {pageError && (
-        <div className="page-error" role="alert">
-          {pageError}
-        </div>
-      )}
-
       {loading ? (
         <div className="state-card">
           <div className="spinner" />
           <h2>Loading venues...</h2>
           <p>Please wait while your venue list is loaded.</p>
+        </div>
+      ) : pageError ? (
+        <div className="state-card error-card">
+          <div className="state-icon">!</div>
+          <h2>Unable to load venues</h2>
+          <p>{pageError}</p>
+          <button className="primary-button" type="button" onClick={() => void loadVenues()}>
+            Try Again
+          </button>
         </div>
       ) : venues.length === 0 ? (
         <div className="state-card empty-card">
@@ -440,42 +428,6 @@ export default function VenuesPage() {
                 </label>
               </div>
 
-              <div className="form-row">
-                <label>
-                  <span>REAL WIDTH (METRES) *</span>
-                  <input
-                    type="number"
-                    min="0.1"
-                    step="0.1"
-                    value={form.width}
-                    onChange={(event) => updateField("width", event.target.value)}
-                    required
-                  />
-                </label>
-                <label>
-                  <span>REAL DEPTH (METRES) *</span>
-                  <input
-                    type="number"
-                    min="0.1"
-                    step="0.1"
-                    value={form.depth}
-                    onChange={(event) => updateField("depth", event.target.value)}
-                    required
-                  />
-                </label>
-              </div>
-
-              <label>
-                <span>IRREGULAR FLOOR BOUNDARY (OPTIONAL JSON)</span>
-                <textarea
-                  value={form.boundaryData}
-                  onChange={(event) => updateField("boundaryData", event.target.value)}
-                  placeholder={'[{"x":-5,"z":-4},{"x":5,"z":-4},{"x":6,"z":1},{"x":2,"z":4},{"x":-5,"z":3}]'}
-                  rows={4}
-                />
-                <small>Leave empty for a rectangular floor. Points are in real metres and must describe the usable floor boundary.</small>
-              </label>
-
               <label>
                 <span>VENUE TYPE *</span>
                 <select
@@ -543,17 +495,153 @@ export default function VenuesPage() {
       )}
 
       <style jsx>{`
-        .venues-page { min-height: 100vh; background: #f5f7fb; color: #223047; padding: 40px 54px 70px; font-family: Arial, Helvetica, sans-serif; }
-        .venues-header { display: flex; justify-content: space-between; gap: 30px; align-items: flex-end; margin-bottom: 22px; }
+        .venues-page {
+          min-height: 100vh;
+          color: #223047;
+          padding: 0 60px 70px;
+          font-family: Arial, Helvetica, sans-serif;
+          background-color: #f7f9fc;
+          background-image: radial-gradient(circle, rgba(79, 103, 148, 0.22) 1px, transparent 1.2px);
+          background-size: 24px 24px;
+        }
+
+        .topbar {
+          min-height: 108px;
+          margin: 0 -60px 36px;
+          padding: 14px 60px;
+          display: grid;
+          grid-template-columns: minmax(230px, 1fr) minmax(640px, 1.85fr) minmax(230px, 1fr);
+          align-items: center;
+          gap: 28px;
+          background: rgba(255, 255, 255, 0.94);
+          border-bottom: 1px solid #dfe5ee;
+          box-shadow: 0 8px 24px rgba(38, 55, 86, 0.05);
+          backdrop-filter: blur(14px);
+        }
+
+        .brand {
+          display: inline-flex;
+          align-items: center;
+          gap: 13px;
+          width: fit-content;
+          text-decoration: none;
+          color: inherit;
+          white-space: nowrap;
+        }
+
+        .brand-icon {
+          width: 58px;
+          height: 58px;
+          display: grid;
+          place-items: center;
+          flex: 0 0 58px;
+          border-radius: 14px;
+          color: #ffffff;
+          background: linear-gradient(135deg, #3f70c9, #294f9d);
+          box-shadow: 0 10px 22px rgba(49, 91, 182, 0.22);
+          font-size: 26px;
+          font-weight: 900;
+        }
+
+        .brand-copy {
+          display: grid;
+          gap: 3px;
+        }
+
+        .brand-title {
+          color: #27364a;
+          font-size: 22px;
+          line-height: 1.1;
+          font-weight: 800;
+          letter-spacing: 0.01em;
+        }
+
+        .brand-subtitle {
+          color: #738097;
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .main-navigation {
+          width: 100%;
+          min-height: 54px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 7px;
+          box-sizing: border-box;
+          border: 1px solid #d7deea;
+          border-radius: 18px;
+          background: linear-gradient(180deg, #f8fafc, #eef2f7);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+        }
+
+        .top-nav-link {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 40px;
+          padding: 0 14px;
+          border-radius: 11px;
+          color: #425066;
+          text-decoration: none;
+          font-size: 15px;
+          font-weight: 750;
+          white-space: nowrap;
+          transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+        }
+
+        .top-nav-link:hover {
+          color: #2d58ad;
+          background: #e9effa;
+        }
+
+        .top-nav-link.active {
+          color: #294f9d;
+          background: #dfe8f8;
+          box-shadow: 0 4px 12px rgba(52, 80, 135, 0.12);
+        }
+
+        .topbar::after {
+          content: "";
+          min-width: 0;
+        }
+
+        .venues-header {
+          display: flex;
+          justify-content: space-between;
+          gap: 30px;
+          align-items: flex-end;
+          margin-bottom: 22px;
+          max-width: 1500px;
+          margin-left: auto;
+          margin-right: auto;
+        }
         .eyebrow { display: block; color: #60719b; font-size: 11px; font-weight: 800; letter-spacing: .14em; margin-bottom: 7px; }
         h1 { margin: 0; font-size: 38px; letter-spacing: -.03em; }
         .venues-header p { margin: 10px 0 0; color: #68778d; font-size: 16px; }
         .primary-button, .editor-button { border: 0; border-radius: 10px; background: #315bb6; color: white; font-weight: 700; cursor: pointer; padding: 14px 22px; box-shadow: 0 8px 20px rgba(49,91,182,.2); transition: .2s; }
         .primary-button:hover, .editor-button:hover { transform: translateY(-1px); background: #294d9a; }
         button:disabled { cursor: not-allowed; opacity: .65; transform: none !important; }
-        .summary-row { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 22px; color: #75839a; font-size: 14px; }
+        .summary-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          max-width: 1500px;
+          margin: 18px auto 22px;
+          color: #75839a;
+          font-size: 14px;
+        }
         .refresh-button { border: 1px solid #d9e0ec; border-radius: 8px; background: white; color: #53637b; padding: 9px 13px; cursor: pointer; font-weight: 700; }
-        .venues-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; max-width: 1500px; }
+        .venues-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(310px, 360px));
+          gap: 22px;
+          max-width: 1500px;
+          margin: 0 auto;
+          justify-content: start;
+        }
         .venue-card { background: white; border: 1px solid #dfe5ef; border-radius: 18px; padding: 28px; box-shadow: 0 10px 30px rgba(38,55,86,.06); transition: .2s; }
         .venue-card:hover { transform: translateY(-3px); box-shadow: 0 16px 35px rgba(38,55,86,.1); }
         .card-topline { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -613,7 +701,107 @@ export default function VenuesPage() {
         .form-error { border: 1px solid #f1c8c4; background: #fff3f2; color: #ad4841; border-radius: 10px; padding: 13px 15px; font-size: 14px; line-height: 1.45; }
         .modal-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 5px; }
         .secondary-button { border: 1px solid #d5dde8; background: white; color: #526177; border-radius: 10px; padding: 13px 21px; font-weight: 700; cursor: pointer; }
-        @media (max-width: 720px) { .venues-page { padding: 28px 20px 50px; } .venues-header { align-items: stretch; flex-direction: column; } .venues-header .primary-button { width: 100%; } .form-row { grid-template-columns: 1fr; } .modal-header, .venue-form { padding-left: 22px; padding-right: 22px; } .card-actions { flex-direction: column; } .card-actions button { width: 100%; } }
+        @media (max-width: 1100px) {
+          .topbar {
+            grid-template-columns: 1fr;
+            gap: 14px;
+            padding: 16px 30px;
+          }
+
+          .topbar::after {
+            display: none;
+          }
+
+          .brand {
+            justify-self: center;
+          }
+
+          .main-navigation {
+            overflow-x: auto;
+            justify-content: flex-start;
+            scrollbar-width: none;
+          }
+
+          .main-navigation::-webkit-scrollbar {
+            display: none;
+          }
+
+          .venues-page {
+            padding-left: 30px;
+            padding-right: 30px;
+          }
+
+          .topbar {
+            margin-left: -30px;
+            margin-right: -30px;
+          }
+        }
+
+        @media (max-width: 720px) {
+          .venues-page {
+            padding: 0 20px 50px;
+          }
+
+          .topbar {
+            min-height: auto;
+            margin: 0 -20px 28px;
+            padding: 14px 20px;
+          }
+
+          .brand-icon {
+            width: 50px;
+            height: 50px;
+            flex-basis: 50px;
+            border-radius: 12px;
+            font-size: 22px;
+          }
+
+          .brand-title {
+            font-size: 19px;
+          }
+
+          .main-navigation {
+            border-radius: 14px;
+            padding: 6px;
+          }
+
+          .top-nav-link {
+            min-height: 38px;
+            padding: 0 13px;
+            font-size: 14px;
+          }
+
+          .venues-header {
+            align-items: stretch;
+            flex-direction: column;
+          }
+
+          .venues-header .primary-button {
+            width: 100%;
+          }
+
+          .form-row {
+            grid-template-columns: 1fr;
+          }
+
+          .modal-header,
+          .venue-form {
+            padding-left: 22px;
+            padding-right: 22px;
+          }
+
+          .card-actions {
+            flex-direction: column;
+          }
+
+          .card-actions button {
+            width: 100%;
+          }
+
+          .venues-grid {
+            grid-template-columns: 1fr;
+          }
+        }
       `}</style>
     </main>
   );
