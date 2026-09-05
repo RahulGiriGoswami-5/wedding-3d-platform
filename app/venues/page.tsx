@@ -1119,6 +1119,474 @@ export default function VenuesPage() {
             grid-template-columns: 1fr;
           }
         }
+
+
+        /* ================================================================
+           FINAL MOBILE LANDSCAPE LAYOUT — PRIMARY TARGET: 844 × 390
+           This override intentionally mirrors the compact two-row navbar
+           proportions used by app/page.tsx while preserving every venue
+           management feature.
+           ================================================================ */
+        @media screen and (orientation: landscape) and (max-width: 950px) and (max-height: 520px) {
+          .venues-page {
+            min-height: 100svh;
+            padding: 0 12px 18px;
+            background-size: 20px 20px;
+          }
+
+          .planner-navbar {
+            position: sticky;
+            top: 0;
+            width: calc(100% + 24px);
+            margin-left: -12px;
+            margin-bottom: 8px;
+            z-index: 1000;
+          }
+
+          .planner-navbar-inner {
+            min-height: 96px;
+            padding: 6px 10px 7px;
+            display: grid;
+            grid-template-columns: 1fr;
+            grid-template-rows: 43px 42px;
+            gap: 4px;
+            align-items: center;
+          }
+
+          .planner-brand {
+            height: 43px;
+            gap: 9px;
+            padding-left: 2px;
+          }
+
+          .planner-brand-mark {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            font-size: 18px;
+          }
+
+          .planner-brand-title {
+            font-size: 16px;
+            line-height: 1;
+          }
+
+          .planner-brand-subtitle {
+            display: none;
+          }
+
+          .planner-navigation {
+            order: 0;
+            min-height: 42px;
+            height: 42px;
+            padding: 3px;
+            gap: 2px;
+            border-radius: 13px;
+            justify-content: center;
+            overflow-x: auto;
+            overscroll-behavior-x: contain;
+            scrollbar-width: none;
+          }
+
+          .planner-navigation::-webkit-scrollbar {
+            display: none;
+          }
+
+          .planner-nav-link {
+            flex: 0 0 auto;
+            padding: 8px 14px;
+            font-size: 12px;
+            border-radius: 9px;
+          }
+
+          .venues-header {
+            max-width: none;
+            margin: 0 0 8px;
+            gap: 10px;
+            align-items: center;
+          }
+
+          .eyebrow {
+            margin-bottom: 2px;
+            font-size: 9px;
+          }
+
+          h1 {
+            font-size: 25px;
+            line-height: 1;
+          }
+
+          .venues-header p {
+            margin-top: 4px;
+            font-size: 11px;
+            line-height: 1.25;
+          }
+
+          .primary-button,
+          .editor-button {
+            padding: 9px 13px;
+            border-radius: 8px;
+            font-size: 12px;
+            box-shadow: 0 5px 12px rgba(49,91,182,.16);
+          }
+
+          .summary-row {
+            max-width: none;
+            margin: 6px 0 8px;
+            font-size: 11px;
+          }
+
+          .refresh-button {
+            padding: 6px 9px;
+            border-radius: 7px;
+            font-size: 11px;
+          }
+
+          .venues-grid {
+            max-width: none;
+            grid-template-columns: repeat(auto-fill, minmax(255px, 1fr));
+            gap: 10px;
+          }
+
+          .venue-card {
+            border-radius: 12px;
+            padding: 13px;
+          }
+
+          .card-topline {
+            gap: 7px;
+          }
+
+          .venue-type,
+          .status {
+            padding: 5px 8px;
+            font-size: 9px;
+          }
+
+          .venue-card h2 {
+            margin: 10px 0;
+            font-size: 17px;
+          }
+
+          .venue-details {
+            gap: 7px;
+          }
+
+          .venue-details > div {
+            grid-template-columns: 17px 1fr auto;
+            gap: 5px;
+          }
+
+          .venue-details p,
+          .venue-details strong {
+            font-size: 10px;
+          }
+
+          .model-status {
+            margin: 10px 0;
+            padding: 9px 0;
+            gap: 5px;
+            font-size: 10px;
+          }
+
+          .model-dot {
+            width: 6px;
+            height: 6px;
+          }
+
+          .card-actions {
+            gap: 7px;
+          }
+
+          .delete-button,
+          .editor-button {
+            min-height: 34px;
+            padding: 8px 10px;
+            font-size: 11px;
+          }
+
+          .state-card {
+            min-height: 180px;
+            padding: 18px;
+            border-radius: 12px;
+          }
+
+          .state-card h2 {
+            margin: 8px 0 5px;
+            font-size: 18px;
+          }
+
+          .state-card p {
+            margin-bottom: 12px;
+            font-size: 12px;
+            line-height: 1.4;
+          }
+
+          .modal-backdrop {
+            padding: 8px;
+          }
+
+          .venue-modal {
+            width: min(680px, 100%);
+            max-height: calc(100svh - 16px);
+            border-radius: 13px;
+          }
+
+          .modal-header {
+            padding: 13px 17px 11px;
+          }
+
+          .modal-header h2 {
+            font-size: 20px;
+          }
+
+          .modal-header p {
+            margin-top: 4px;
+            font-size: 11px;
+          }
+
+          .close-button {
+            width: 32px;
+            height: 32px;
+            font-size: 23px;
+          }
+
+          .venue-form {
+            padding: 13px 17px 17px;
+            gap: 11px;
+          }
+
+          .venue-form label,
+          .upload-title {
+            gap: 5px;
+            font-size: 10px;
+          }
+
+          .venue-form input,
+          .venue-form select {
+            min-height: 38px;
+            padding: 0 10px;
+            border-radius: 8px;
+            font-size: 12px;
+          }
+
+          .form-row {
+            gap: 10px;
+          }
+
+          .file-picker {
+            min-height: 56px;
+            padding: 8px 10px;
+            gap: 9px !important;
+          }
+
+          .file-icon {
+            width: 29px;
+            height: 29px;
+          }
+
+          .file-picker strong,
+          .file-picker small,
+          .upload-help,
+          .availability-row strong,
+          .availability-row small,
+          .form-error {
+            font-size: 10px;
+          }
+
+          .availability-row {
+            gap: 8px !important;
+          }
+
+          .availability-row input {
+            width: 16px;
+            min-height: 16px;
+          }
+
+          .modal-actions {
+            gap: 8px;
+          }
+
+          .secondary-button {
+            padding: 9px 13px;
+            border-radius: 8px;
+            font-size: 11px;
+          }
+        }
+
+        /* FINAL 844 × 390 REFINEMENT
+           Keeps the complete venue card visible without making the page feel crowded. */
+        @media screen and (orientation: landscape) and (min-width: 800px) and (max-width: 900px) and (min-height: 360px) and (max-height: 430px) {
+          .venues-page {
+            padding: 0 10px 8px;
+            background-image: radial-gradient(circle, rgba(79, 103, 148, 0.18) 0.7px, transparent 0.95px);
+            background-size: 18px 18px;
+          }
+
+          .planner-navbar {
+            width: calc(100% + 20px);
+            margin-left: -10px;
+            margin-bottom: 5px;
+          }
+
+          .planner-navbar-inner {
+            min-height: 76px;
+            padding: 4px 10px 5px;
+            grid-template-rows: 34px 32px;
+            gap: 3px;
+          }
+
+          .planner-brand {
+            height: 34px;
+            gap: 8px;
+            padding-left: 2px;
+          }
+
+          .planner-brand-mark {
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            font-size: 15px;
+          }
+
+          .planner-brand-title {
+            font-size: 14px;
+          }
+
+          .planner-navigation {
+            min-height: 32px;
+            height: 32px;
+            padding: 2px;
+            gap: 1px;
+            border-radius: 10px;
+          }
+
+          .planner-nav-link {
+            padding: 5px 11px;
+            font-size: 10px;
+            border-radius: 7px;
+          }
+
+          .venues-header {
+            margin: 0 0 4px;
+            gap: 8px;
+          }
+
+          .eyebrow {
+            margin-bottom: 1px;
+            font-size: 8px;
+            letter-spacing: 1.4px;
+          }
+
+          h1 {
+            font-size: 18px;
+            line-height: 1;
+          }
+
+          .venues-header p {
+            margin-top: 2px;
+            font-size: 9px;
+            line-height: 1.15;
+          }
+
+          .primary-button {
+            min-height: 32px;
+            padding: 7px 11px;
+            border-radius: 7px;
+            font-size: 10px;
+          }
+
+          .summary-row {
+            margin: 3px 0 4px;
+            font-size: 9px;
+          }
+
+          .refresh-button {
+            padding: 5px 8px;
+            border-radius: 6px;
+            font-size: 9px;
+          }
+
+          .venues-grid {
+            grid-template-columns: minmax(235px, 270px);
+            gap: 8px;
+          }
+
+          .venue-card {
+            padding: 9px 10px;
+            border-radius: 10px;
+          }
+
+          .card-topline {
+            gap: 6px;
+          }
+
+          .venue-type,
+          .status {
+            padding: 4px 7px;
+            font-size: 8px;
+          }
+
+          .venue-card h2 {
+            margin: 7px 0;
+            font-size: 15px;
+            line-height: 1.1;
+          }
+
+          .venue-details {
+            gap: 5px;
+          }
+
+          .venue-details > div {
+            grid-template-columns: 15px 1fr auto;
+            gap: 4px;
+          }
+
+          .venue-details p,
+          .venue-details strong {
+            font-size: 9px;
+          }
+
+          .model-status {
+            margin: 7px 0;
+            padding: 6px 0;
+            gap: 4px;
+            font-size: 9px;
+          }
+
+          .card-actions {
+            gap: 6px;
+          }
+
+          .delete-button,
+          .editor-button {
+            min-height: 29px;
+            padding: 6px 9px;
+            font-size: 9px;
+            border-radius: 7px;
+          }
+
+          /* Keep the venue tile even narrower and aligned to the left
+             on the 844 × 390 target layout. */
+          .venues-grid {
+            width: 250px;
+            max-width: 100%;
+            grid-template-columns: 250px;
+            margin-left: 0;
+            margin-right: auto;
+            justify-content: start;
+          }
+
+          .venues-header h1 {
+            font-size: 18px;
+          }
+
+          :global(html[data-theme="dark"]) .venues-page {
+            background-image: radial-gradient(circle, rgba(173, 196, 235, 0.18) 0.7px, transparent 0.95px);
+            background-size: 18px 18px;
+          }
+        }
+
       `}</style>
     </main>
   );
