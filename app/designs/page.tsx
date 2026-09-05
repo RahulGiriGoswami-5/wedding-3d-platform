@@ -2352,7 +2352,293 @@ export default function DesignsPage() {
         .page-dark .modalActions {
           border-top-color: #35465f;
         }
-      `}</style>
+      
+
+        /* =====================================================
+           FINAL 844 x 390 LANDSCAPE OVERRIDES
+           ===================================================== */
+        @media (max-width: 900px) and (orientation: landscape),
+               (max-height: 500px) and (orientation: landscape) {
+
+          .page {
+            --planner-page-gutter: 0px;
+            padding: 0 10px 10px;
+            background-size: 20px 20px;
+          }
+
+          .planner-navbar {
+            width: 100%;
+            margin: 0;
+          }
+
+          .planner-navbar-inner {
+            min-height: 0;
+            padding: 5px 10px 4px;
+            gap: 5px;
+          }
+
+          .planner-brand { gap: 6px; }
+
+          .planner-brand-mark {
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            font-size: 14px;
+          }
+
+          .planner-brand-title {
+            font-size: 13px;
+            line-height: 1;
+          }
+
+          .planner-brand-subtitle { display: none; }
+
+          .planner-navigation {
+            min-height: 31px;
+            height: 31px;
+            margin-top: 4px;
+            padding: 3px 4px;
+            gap: 1px;
+            border-radius: 10px;
+            justify-content: center;
+            overflow: hidden;
+          }
+
+          .planner-nav-link {
+            padding: 6px 8px;
+            border-radius: 7px;
+            font-size: 9px;
+            line-height: 1;
+          }
+
+          .hero {
+            min-height: 0;
+            margin: 7px auto;
+            padding: 9px 12px;
+            gap: 10px;
+            border-radius: 11px;
+          }
+
+          .heroTag, .hero p { display: none; }
+
+          .hero h1 {
+            font-size: 15px;
+            letter-spacing: -0.2px;
+          }
+
+          .newDesignButton {
+            min-width: 86px;
+            min-height: 29px;
+            padding: 0 9px;
+            border-radius: 7px;
+            font-size: 9px;
+          }
+
+          .sectionHeading {
+            margin-bottom: 6px;
+            gap: 7px;
+          }
+
+          .sectionHeading h2 { font-size: 14px; }
+          .sectionHeading p { display: none; }
+          .headingActions { gap: 5px; }
+
+          .designCount {
+            padding: 5px 7px;
+            font-size: 9px;
+          }
+
+          .refreshButton {
+            min-height: 28px;
+            padding: 0 8px;
+            border-radius: 7px;
+            font-size: 9px;
+          }
+
+          .message {
+            margin-bottom: 6px;
+            padding: 6px 8px;
+            border-radius: 7px;
+            font-size: 9px;
+          }
+
+          .message span {
+            width: 15px;
+            height: 15px;
+            font-size: 8px;
+          }
+
+          .designGrid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 7px;
+          }
+
+          .designCard { border-radius: 9px; }
+
+          .designPreview {
+            height: 54px;
+            padding: 7px;
+          }
+
+          .previewBadge {
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-size: 6px;
+            letter-spacing: 0.5px;
+          }
+
+          .designId { font-size: 7px; }
+          .previewText { gap: 1px; }
+
+          .previewText span {
+            font-size: 6px;
+            letter-spacing: 0.5px;
+          }
+
+          .previewText strong { font-size: 11px; }
+
+          .designContent { padding: 7px; }
+
+          .designTitleRow {
+            margin-bottom: 5px;
+            gap: 5px;
+          }
+
+          .designTitleRow h3 { font-size: 11px; }
+
+          .designTitleRow p {
+            margin-top: 2px;
+            font-size: 7px;
+          }
+
+          .editIconButton {
+            width: 22px;
+            height: 22px;
+            border-radius: 6px;
+            font-size: 11px;
+          }
+
+          .infoGrid {
+            gap: 5px;
+            margin-bottom: 5px;
+          }
+
+          .infoBox {
+            padding: 5px;
+            border-radius: 6px;
+          }
+
+          .infoLabel {
+            margin-bottom: 2px;
+            font-size: 6px;
+            letter-spacing: 0.4px;
+          }
+
+          .infoBox strong,
+          .infoBox small { font-size: 8px; }
+
+          .themeInfo { gap: 4px; }
+
+          .themeDot {
+            width: 6px;
+            height: 6px;
+          }
+
+          .cardActions { gap: 4px; }
+
+          .actionButton {
+            min-height: 25px;
+            padding: 4px 3px;
+            border-radius: 6px;
+            font-size: 7px;
+          }
+
+          .deleteButton {
+            min-height: 24px;
+            margin-top: 4px;
+            padding: 4px;
+            border-radius: 6px;
+            font-size: 8px;
+          }
+
+          .stateCard,
+          .emptyState {
+            padding: 20px 10px;
+            border-radius: 9px;
+          }
+
+          .modalOverlay { padding: 8px; }
+
+          .modal {
+            width: min(430px, 96vw);
+            max-height: calc(100vh - 16px);
+            overflow-y: auto;
+            padding: 11px;
+            border-radius: 10px;
+          }
+
+          .modalHeader { margin-bottom: 8px; }
+
+          .modalTag {
+            font-size: 7px;
+            letter-spacing: 0.7px;
+          }
+
+          .modalHeader h2 {
+            margin-top: 3px;
+            font-size: 15px;
+          }
+
+          .closeButton {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            font-size: 17px;
+          }
+
+          .formGroup label {
+            margin-bottom: 4px;
+            font-size: 9px;
+          }
+
+          .formGroup input {
+            padding: 7px;
+            border-radius: 6px;
+            font-size: 10px;
+          }
+
+          .modalDetails {
+            gap: 6px;
+            margin-top: 8px;
+          }
+
+          .modalDetails div {
+            padding: 7px;
+            border-radius: 7px;
+          }
+
+          .modalDetails span {
+            margin-bottom: 3px;
+            font-size: 7px;
+          }
+
+          .modalDetails strong { font-size: 9px; }
+
+          .modalActions {
+            gap: 6px;
+            margin-top: 9px;
+          }
+
+          .cancelButton,
+          .saveEditButton {
+            min-height: 29px;
+            padding: 6px 9px;
+            border-radius: 6px;
+            font-size: 9px;
+          }
+        }
+
+`}</style>
 
     </main>
   );
