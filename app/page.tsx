@@ -1,6 +1,6 @@
 "use client";
 
-import { Canvas, ThreeEvent, useLoader, useThree } from "@react-three/fiber";
+import { Canvas, ThreeEvent, useFrame, useLoader, useThree } from "@react-three/fiber";
 import {
   Grid,
   Html,
@@ -9,7 +9,7 @@ import {
   OrthographicCamera,
   useGLTF,
 } from "@react-three/drei";
-import { Component, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Component, Suspense, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import * as THREE from "three";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
@@ -1799,6 +1799,252 @@ function PreviewOverlay({
 }
 
 /* =========================================================
+   FIRST-PERSON WALK CONTROLS
+========================================================= */
+
+type WalkDirection = "forward" | "back" | "left" | "right";
+
+function FirstPersonWalker({ enabled }: { enabled: boolean }) {
+  const { camera, gl } = useThree();
+  const keys = useRef<Record<string, boolean>>({});
+  const yaw = useRef(Math.PI);
+  const pitch = useRef(0);
+  const draggingTouch = useRef(false);
+  const lastTouch = useRef({ x: 0, y: 0 });
+  const locked = useRef(false);
+  // Browsers reject a new pointer-lock request immediately after the lock
+  // has been released. Keep a short cooldown and only request it from a
+  // genuine canvas interaction.
+  const pointerLockCooldownUntil = useRef(0);
+
+  const clampPosition = () => {
+    camera.position.x = THREE.MathUtils.clamp(camera.position.x, -5.6, 5.6);
+    camera.position.z = THREE.MathUtils.clamp(camera.position.z, -5.6, 5.6);
+    camera.position.y = 1.65;
+  };
+
+  const updateCameraRotation = () => {
+    camera.rotation.order = "YXZ";
+    camera.rotation.y = yaw.current;
+    camera.rotation.x = THREE.MathUtils.clamp(pitch.current, -1.25, 1.25);
+  };
+
+  const moveInDirection = (direction: WalkDirection, distance: number) => {
+    const forward = new THREE.Vector3(
+      -Math.sin(yaw.current),
+      0,
+      -Math.cos(yaw.current)
+    );
+    const right = new THREE.Vector3(
+      Math.cos(yaw.current),
+      0,
+      -Math.sin(yaw.current)
+    );
+
+    if (direction === "forward") camera.position.addScaledVector(forward, distance);
+    if (direction === "back") camera.position.addScaledVector(forward, -distance);
+    if (direction === "right") camera.position.addScaledVector(right, distance);
+    if (direction === "left") camera.position.addScaledVector(right, -distance);
+
+    clampPosition();
+  };
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    const canvas = gl.domElement;
+    const previousTouchAction = canvas.style.touchAction;
+    canvas.style.touchAction = "none";
+
+    // Start just outside the front-side edge of the venue instead of in
+    // the middle of the model. The camera faces diagonally into the venue so
+    // the user can see both the platform and the surrounding open space.
+    const walkStart = new THREE.Vector3(-5.0, 1.65, 4.8);
+    const walkTarget = new THREE.Vector3(0, 1.65, 0);
+
+    camera.position.copy(walkStart);
+
+    const initialDirection = walkTarget
+      .clone()
+      .sub(walkStart)
+      .normalize();
+
+    yaw.current = Math.atan2(
+      -initialDirection.x,
+      -initialDirection.z
+    );
+    pitch.current = 0;
+    updateCameraRotation();
+
+    const movementKeys = [
+      "KeyW",
+      "KeyA",
+      "KeyS",
+      "KeyD",
+      "ArrowUp",
+      "ArrowDown",
+      "ArrowLeft",
+      "ArrowRight",
+    ];
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (movementKeys.includes(event.code)) {
+        keys.current[event.code] = true;
+        event.preventDefault();
+      }
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      keys.current[event.code] = false;
+    };
+
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!locked.current) return;
+      yaw.current -= event.movementX * 0.0024;
+      pitch.current -= event.movementY * 0.0024;
+      updateCameraRotation();
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      // Touch devices use drag-to-look, so pointer lock is desktop-only.
+      if (event.pointerType === "touch" || event.button !== 0) return;
+      if (document.pointerLockElement === canvas) return;
+      if (performance.now() < pointerLockCooldownUntil.current) return;
+
+      try {
+        const requestResult = canvas.requestPointerLock?.();
+
+        // Modern browsers can return a Promise. Catch its rejection so a
+        // browser security restriction never becomes a Next.js runtime error.
+        if (requestResult && typeof (requestResult as Promise<void>).catch === "function") {
+          (requestResult as Promise<void>).catch(() => {
+            pointerLockCooldownUntil.current = performance.now() + 350;
+          });
+        }
+      } catch {
+        pointerLockCooldownUntil.current = performance.now() + 350;
+      }
+    };
+
+    const handlePointerLockChange = () => {
+      const isLocked = document.pointerLockElement === canvas;
+      locked.current = isLocked;
+
+      if (!isLocked) {
+        pointerLockCooldownUntil.current = performance.now() + 350;
+      }
+    };
+
+    const handlePointerLockError = () => {
+      locked.current = false;
+      pointerLockCooldownUntil.current = performance.now() + 500;
+    };
+
+    const handleTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      draggingTouch.current = true;
+      lastTouch.current = { x: touch.clientX, y: touch.clientY };
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      if (!draggingTouch.current || event.touches.length !== 1) return;
+
+      const touch = event.touches[0];
+      const dx = touch.clientX - lastTouch.current.x;
+      const dy = touch.clientY - lastTouch.current.y;
+
+      if (Math.abs(dx) > 0 || Math.abs(dy) > 0) {
+        event.preventDefault();
+        yaw.current -= dx * 0.012;
+        pitch.current -= dy * 0.012;
+        updateCameraRotation();
+        lastTouch.current = { x: touch.clientX, y: touch.clientY };
+      }
+    };
+
+    const handleTouchEnd = () => {
+      draggingTouch.current = false;
+    };
+
+    const handleWalkStep = (event: Event) => {
+      const direction = (event as CustomEvent<WalkDirection>).detail;
+      if (
+        direction === "forward" ||
+        direction === "back" ||
+        direction === "left" ||
+        direction === "right"
+      ) {
+        moveInDirection(direction, 1.35);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("pointerlockchange", handlePointerLockChange);
+    document.addEventListener("pointerlockerror", handlePointerLockError);
+    canvas.addEventListener("pointerdown", handlePointerDown);
+    canvas.addEventListener("touchstart", handleTouchStart, { passive: true });
+    canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
+    canvas.addEventListener("touchend", handleTouchEnd, { passive: true });
+    window.addEventListener("wedding-walk-step", handleWalkStep as EventListener);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("pointerlockchange", handlePointerLockChange);
+      document.removeEventListener("pointerlockerror", handlePointerLockError);
+      canvas.removeEventListener("pointerdown", handlePointerDown);
+      canvas.removeEventListener("touchstart", handleTouchStart);
+      canvas.removeEventListener("touchmove", handleTouchMove);
+      canvas.removeEventListener("touchend", handleTouchEnd);
+      window.removeEventListener("wedding-walk-step", handleWalkStep as EventListener);
+
+      if (document.pointerLockElement === canvas) {
+        pointerLockCooldownUntil.current = performance.now() + 350;
+        document.exitPointerLock?.();
+      }
+
+      canvas.style.touchAction = previousTouchAction;
+      keys.current = {};
+      locked.current = false;
+      draggingTouch.current = false;
+    };
+  }, [enabled, camera, gl]);
+
+  useFrame((_, delta) => {
+    if (!enabled) return;
+
+    const movement = new THREE.Vector3();
+    const forward = new THREE.Vector3(
+      -Math.sin(yaw.current),
+      0,
+      -Math.cos(yaw.current)
+    );
+    const right = new THREE.Vector3(
+      Math.cos(yaw.current),
+      0,
+      -Math.sin(yaw.current)
+    );
+
+    if (keys.current.KeyW || keys.current.ArrowUp) movement.add(forward);
+    if (keys.current.KeyS || keys.current.ArrowDown) movement.sub(forward);
+    if (keys.current.KeyD || keys.current.ArrowRight) movement.add(right);
+    if (keys.current.KeyA || keys.current.ArrowLeft) movement.sub(right);
+
+    if (movement.lengthSq() === 0) return;
+
+    movement.normalize().multiplyScalar(3.2 * Math.min(delta, 0.05));
+    camera.position.add(movement);
+    clampPosition();
+  });
+
+  return null;
+}
+
+/* =========================================================
    TOP BAR
 ========================================================= */
 
@@ -1815,13 +2061,25 @@ function TopBar({
   venue: Venue | null;
   saving: boolean;
   saveScene: () => void;
-  viewMode: "2D" | "3D";
-  setViewMode: (mode: "2D" | "3D") => void;
+  viewMode: "2D" | "3D" | "WALK";
+  setViewMode: (mode: "2D" | "3D" | "WALK") => void;
   selectedTheme: Theme | null;
   onSwitchTheme: () => void;
   onPreview: () => void;
 }) {
   const primaryColor = selectedTheme?.primaryColor || "#2563eb";
+
+  const handleNavigationClick = (event: ReactMouseEvent<HTMLAnchorElement>) => {
+    if (viewMode !== "WALK") return;
+
+    setViewMode("3D");
+
+    // The Designer link points to the current page. Prevent a full reload so
+    // tapping it on mobile simply exits Walk mode and returns to the editor.
+    if (event.currentTarget.getAttribute("href") === "/") {
+      event.preventDefault();
+    }
+  };
 
   return (
     <header className="topbar">
@@ -1834,12 +2092,12 @@ function TopBar({
       </a>
 
       <nav className="main-navigation" aria-label="Main navigation">
-        <a href="/" className="top-nav-link active" aria-current="page">Designer</a>
-        <a href="/venues" className="top-nav-link">Venues</a>
-        <a href="/inventory" className="top-nav-link">Inventory</a>
-        <a href="/match" className="top-nav-link">Find Matches</a>
-        <a href="/themes" className="top-nav-link">Themes</a>
-        <a href="/designs" className="top-nav-link">Saved Designs</a>
+        <a href="/" className="top-nav-link active" aria-current="page" onClick={handleNavigationClick}>Designer</a>
+        <a href="/venues" className="top-nav-link" onClick={handleNavigationClick}>Venues</a>
+        <a href="/inventory" className="top-nav-link" onClick={handleNavigationClick}>Inventory</a>
+        <a href="/match" className="top-nav-link" onClick={handleNavigationClick}>Find Matches</a>
+        <a href="/themes" className="top-nav-link" onClick={handleNavigationClick}>Themes</a>
+        <a href="/designs" className="top-nav-link" onClick={handleNavigationClick}>Saved Designs</a>
       </nav>
 
       <div className="project-title">
@@ -1895,6 +2153,14 @@ function TopBar({
         <div className="view-toggle">
           <button type="button" className={viewMode === "2D" ? "view-active" : ""} onClick={() => setViewMode("2D")}>2D</button>
           <button type="button" className={viewMode === "3D" ? "view-active" : ""} onClick={() => setViewMode("3D")}>3D</button>
+          <button
+            type="button"
+            className={viewMode === "WALK" ? "view-active" : ""}
+            onClick={() => setViewMode(viewMode === "WALK" ? "3D" : "WALK")}
+            title={viewMode === "WALK" ? "Exit Walk view" : "Enter the venue and walk through it"}
+          >
+            🚶 Walk
+          </button>
         </div>
       </div>
 
@@ -3125,7 +3391,7 @@ useEffect(() => {
     viewMode,
     setViewMode,
   ] =
-    useState<"2D" | "3D">(
+    useState<"2D" | "3D" | "WALK">(
       "3D"
     );
 
@@ -4316,7 +4582,7 @@ useEffect(() => {
 
             {/* Visible group controls. They operate only on the currently selected
                 placement group and never on unrelated groups elsewhere in the venue. */}
-            {items.length > 0 && (
+            {viewMode !== "WALK" && items.length > 0 && (
               <div className="chair-group-controls" role="group" aria-label="Selected group movement controls">
                 <button type="button" className="move-all-chairs-button" onClick={selectSelectedGroup}
                   title="Select and move only the placement group of the current object">
@@ -4333,10 +4599,7 @@ useEffect(() => {
             )}
 
             <Canvas
-              shadows={
-                viewMode ===
-                "3D"
-              }
+              shadows={viewMode !== "2D"}
 
               camera={{
                 position: [
@@ -4397,7 +4660,7 @@ useEffect(() => {
                   the venue appear as a black shape.
               ================================================= */}
 
-              {viewMode === "3D" && venue?.modelUrl && (
+              {viewMode !== "2D" && venue?.modelUrl && (
                 <ModelErrorBoundary key={venue.modelUrl}>
                   <Suspense fallback={null}>
                     <VenueModel
@@ -4419,8 +4682,7 @@ useEffect(() => {
 
               {items.map(
                 item =>
-                  viewMode ===
-                  "3D" ? (
+                  viewMode !== "2D" ? (
                     <Furniture3D
                       key={
                         item.id
@@ -4471,6 +4733,7 @@ useEffect(() => {
                       onStartDrag={
                         handleStartDrag
                       }
+                      readOnly={viewMode === "WALK"}
                     />
                   ) : (
                     <Furniture2D
@@ -4560,8 +4823,7 @@ useEffect(() => {
 
               <ambientLight
                 intensity={
-                  viewMode ===
-                  "3D"
+                  viewMode !== "2D"
                     ? 1.2
                     : 1
                 }
@@ -4574,15 +4836,11 @@ useEffect(() => {
                   5,
                 ]}
                 intensity={
-                  viewMode ===
-                  "3D"
+                  viewMode !== "2D"
                     ? 2
                     : 1
                 }
-                castShadow={
-                  viewMode ===
-                  "3D"
-                }
+                castShadow={viewMode !== "2D"}
               />
 
               <directionalLight
@@ -4598,24 +4856,19 @@ useEffect(() => {
                   CAMERA CONTROLS
               ================================================= */}
 
-              <OrbitControls
-                makeDefault
-                enabled={!isDragging}
-                enableRotate={
-                  !isDragging &&
-                  viewMode ===
-                  "3D"
-                }
-                enablePan={
-                  !isDragging
-                }
-                minDistance={3}
-                maxDistance={18}
-                maxPolarAngle={
-                  Math.PI /
-                  2.05
-                }
-              />
+              {viewMode === "WALK" ? (
+                <FirstPersonWalker enabled />
+              ) : (
+                <OrbitControls
+                  makeDefault
+                  enabled={!isDragging}
+                  enableRotate={!isDragging && viewMode === "3D"}
+                  enablePan={!isDragging}
+                  minDistance={3}
+                  maxDistance={18}
+                  maxPolarAngle={Math.PI / 2.05}
+                />
+              )}
             </Canvas>
 
 
@@ -4623,19 +4876,97 @@ useEffect(() => {
                 WORKSPACE TITLE
             ================================================= */}
 
-            <div className="workspace-title">
-              <span>
-                {viewMode} VIEW
-              </span>
+            {viewMode !== "WALK" && (
+              <div className="workspace-title">
+                <span>
+                  {viewMode} VIEW
+                </span>
 
-              <strong>
-                {viewMode ===
-                "2D"
-                  ? "Top View • Real Scale"
-                  : venue?.name ||
-                    "Wedding Venue"}
-              </strong>
-            </div>
+                <strong>
+                  {viewMode === "2D"
+                    ? "Top View • Real Scale"
+                    : venue?.name || "Wedding Venue"}
+                </strong>
+              </div>
+            )}
+
+            {viewMode === "WALK" && (
+              <>
+                <button
+                  type="button"
+                  className="walk-exit-button"
+                  onClick={() => setViewMode("3D")}
+                  aria-label="Exit walk view"
+                  title="Exit Walk view"
+                >
+                  ×
+                </button>
+
+                <div className="walk-navigation-controls" aria-label="Walk navigation">
+                  <button
+                    type="button"
+                    className="walk-arrow walk-arrow-up"
+                    onClick={() =>
+                      window.dispatchEvent(
+                        new CustomEvent<WalkDirection>("wedding-walk-step", {
+                          detail: "forward",
+                        })
+                      )
+                    }
+                    aria-label="Move forward"
+                  >
+                    ↑
+                  </button>
+
+                  <div className="walk-arrow-row">
+                    <button
+                      type="button"
+                      className="walk-arrow"
+                      onClick={() =>
+                        window.dispatchEvent(
+                          new CustomEvent<WalkDirection>("wedding-walk-step", {
+                            detail: "left",
+                          })
+                        )
+                      }
+                      aria-label="Move left"
+                    >
+                      ←
+                    </button>
+
+                    <button
+                      type="button"
+                      className="walk-arrow walk-arrow-down"
+                      onClick={() =>
+                        window.dispatchEvent(
+                          new CustomEvent<WalkDirection>("wedding-walk-step", {
+                            detail: "back",
+                          })
+                        )
+                      }
+                      aria-label="Move backward"
+                    >
+                      ↓
+                    </button>
+
+                    <button
+                      type="button"
+                      className="walk-arrow"
+                      onClick={() =>
+                        window.dispatchEvent(
+                          new CustomEvent<WalkDirection>("wedding-walk-step", {
+                            detail: "right",
+                          })
+                        )
+                      }
+                      aria-label="Move right"
+                    >
+                      →
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* =================================================
                 2D INFO
@@ -4921,6 +5252,123 @@ useEffect(() => {
         .view-toggle .view-active {
           background: #2563eb;
           color: #ffffff;
+        }
+
+        .walk-exit-button {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          z-index: 45;
+          width: 30px;
+          height: 30px;
+          border: 1px solid rgba(37, 99, 235, 0.28);
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.94);
+          color: #1e3a8a;
+          box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
+          font-size: 20px;
+          font-weight: 500;
+          line-height: 1;
+          cursor: pointer;
+          display: grid;
+          place-items: center;
+          transition: transform 0.18s ease, background 0.18s ease;
+        }
+
+        .walk-exit-button:hover {
+          transform: scale(1.06);
+          background: #ffffff;
+        }
+
+        .walk-navigation-controls {
+          position: absolute;
+          right: 12px;
+          bottom: max(12px, env(safe-area-inset-bottom));
+          left: auto;
+          transform: none;
+          z-index: 45;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 3px;
+          padding: 5px;
+          border: 1px solid rgba(37, 99, 235, 0.22);
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.88);
+          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.14);
+          backdrop-filter: blur(8px);
+        }
+
+        .walk-arrow-row {
+          display: flex;
+          gap: 3px;
+        }
+
+        .walk-arrow {
+          width: 32px;
+          height: 32px;
+          border: 1px solid rgba(37, 99, 235, 0.22);
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.96);
+          color: #1d4ed8;
+          font-size: 18px;
+          font-weight: 800;
+          line-height: 1;
+          cursor: pointer;
+          display: grid;
+          place-items: center;
+          box-shadow: 0 2px 7px rgba(15, 23, 42, 0.10);
+          user-select: none;
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        .walk-arrow:hover,
+        .walk-arrow:active {
+          background: #2563eb;
+          color: #ffffff;
+          transform: scale(0.96);
+        }
+
+        html[data-theme="dark"] .walk-exit-button,
+        html[data-theme="dark"] .walk-navigation-controls,
+        html[data-theme="dark"] .walk-arrow {
+          background: rgba(23, 34, 53, 0.94);
+          border-color: #3a4d67;
+          color: #bfdbfe;
+        }
+
+        html[data-theme="dark"] .walk-arrow:hover,
+        html[data-theme="dark"] .walk-arrow:active {
+          background: #2563eb;
+          color: #ffffff;
+        }
+
+        @media (max-width: 844px) {
+          .walk-exit-button {
+            top: 8px;
+            right: 8px;
+            width: 28px;
+            height: 28px;
+            font-size: 18px;
+          }
+
+          .walk-navigation-controls {
+            right: 8px;
+            bottom: max(8px, env(safe-area-inset-bottom));
+            padding: 4px;
+            gap: 2px;
+            border-radius: 12px;
+          }
+
+          .walk-arrow-row {
+            gap: 2px;
+          }
+
+          .walk-arrow {
+            width: 30px;
+            height: 30px;
+            font-size: 17px;
+          }
         }
 
         /* =====================================================
