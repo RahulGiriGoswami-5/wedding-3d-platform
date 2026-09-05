@@ -271,11 +271,7 @@ export default function ThemesPage() {
 
       <header className="page-heading">
         <div>
-          <p className="eyebrow">STYLE LIBRARY</p>
           <h1>Wedding Themes</h1>
-          <p className="subtitle">
-            Create and manage visual styles for your wedding designs.
-          </p>
         </div>
       </header>
 
@@ -1339,6 +1335,396 @@ export default function ThemesPage() {
           .planner-theme-toggle {
             grid-column: 2;
             grid-row: 1;
+          }
+        }
+
+
+        /* =====================================================
+           FINAL 844 x 390 MOBILE LANDSCAPE LAYOUT
+           Uses the same compact navigation scale as Inventory.
+           ===================================================== */
+        .page {
+          min-width: 0;
+          overflow-x: hidden;
+        }
+
+        /* Final compact shared navbar scale — matched to the Inventory mobile layout */
+        .planner-navbar-inner {
+          width: 100%;
+          min-height: 0;
+          margin: 0;
+          padding: 6px 10px 5px;
+          display: block;
+          box-sizing: border-box;
+        }
+
+        .planner-brand {
+          gap: 7px;
+          width: max-content;
+        }
+
+        .planner-brand-mark {
+          width: 34px;
+          height: 34px;
+          border-radius: 9px;
+          font-size: 16px;
+        }
+
+        .planner-brand-title {
+          font-size: 15px;
+          line-height: 1.1;
+          letter-spacing: .01em;
+        }
+
+        .planner-brand-subtitle {
+          display: none;
+        }
+
+        .planner-navigation {
+          width: 100%;
+          min-height: 34px;
+          height: 34px;
+          margin: 6px 0 0;
+          padding: 3px 5px;
+          gap: 1px;
+          border-radius: 12px;
+          justify-content: center;
+          overflow: hidden;
+          box-sizing: border-box;
+        }
+
+        .planner-nav-link {
+          padding: 6px 10px;
+          border-radius: 8px;
+          font-size: 11px;
+          font-weight: 700;
+          line-height: 1;
+        }
+
+        /* Page title matches the compact Inventory heading */
+        .page-heading {
+          max-width: none;
+          margin: 0;
+          padding: 10px 14px 7px;
+        }
+
+        .page-heading .eyebrow,
+        .page-heading .subtitle {
+          display: none;
+        }
+
+        .page-heading h1,
+        h1 {
+          margin: 0;
+          color: #243b5a;
+          font-size: 18px;
+          font-weight: 800;
+          line-height: 1.2;
+          letter-spacing: .01em;
+        }
+
+        /* Compact workspace */
+        .content {
+          width: 100%;
+          max-width: none;
+          margin: 0;
+          padding: 0 14px 14px;
+          display: grid;
+          grid-template-columns: minmax(315px, 350px) minmax(0, 1fr);
+          gap: 10px;
+          align-items: start;
+          box-sizing: border-box;
+        }
+
+        .formCard,
+        .themesSection {
+          border-radius: 11px;
+          padding: 10px;
+          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+        }
+
+        .formCard h2,
+        .themesSection h2,
+        h2 {
+          margin: 0 0 7px;
+          font-size: 14px;
+          line-height: 1.2;
+        }
+
+        /* Keep the entire create/edit form visible in landscape */
+        .formCard form {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+          gap: 7px 8px;
+          align-items: start;
+        }
+
+        .formCard .field {
+          gap: 3px;
+          margin: 0;
+        }
+
+        .formCard .field:first-child,
+        .formCard .field:nth-child(2),
+        .formCard .field:last-of-type,
+        .formCard .buttons,
+        .formCard .message {
+          grid-column: 1 / -1;
+        }
+
+        .formCard .colorRow {
+          display: contents;
+        }
+
+        .formCard .colorRow .field {
+          grid-column: auto;
+        }
+
+        label {
+          font-size: 10px;
+          line-height: 1.2;
+        }
+
+        input,
+        textarea,
+        select {
+          border-radius: 7px;
+          padding: 6px 8px;
+          font-size: 11px;
+          line-height: 1.2;
+        }
+
+        textarea {
+          min-height: 34px;
+          height: 34px;
+          resize: none;
+        }
+
+        input[type="color"] {
+          height: 28px;
+          padding: 2px;
+        }
+
+        button {
+          border-radius: 7px;
+          padding: 6px 9px;
+          font-size: 10px;
+          line-height: 1.2;
+        }
+
+        .buttons {
+          display: flex;
+          gap: 7px;
+        }
+
+        .buttons .primaryButton {
+          flex: 1;
+        }
+
+        .message {
+          margin: 0;
+          font-size: 10px;
+          line-height: 1.25;
+        }
+
+        /* Smaller theme section and theme tiles */
+        .sectionHeading {
+          margin-bottom: 8px;
+        }
+
+        .sectionHeading h2 {
+          margin: 0;
+          font-size: 14px;
+        }
+
+        .sectionHeading span {
+          font-size: 10px;
+        }
+
+        .themeGrid {
+          grid-template-columns: repeat(auto-fill, minmax(145px, 180px));
+          gap: 8px;
+          justify-content: start;
+        }
+
+        .themeCard {
+          border-radius: 9px;
+        }
+
+        .colorPreview {
+          height: 42px;
+        }
+
+        .themeContent {
+          padding: 8px;
+        }
+
+        .themeContent h3 {
+          margin: 0 0 5px;
+          font-size: 12px;
+          line-height: 1.2;
+        }
+
+        .themeContent p {
+          margin: 5px 0;
+          min-height: 0;
+          font-size: 9px;
+          line-height: 1.3;
+        }
+
+        .styleTag {
+          padding: 3px 7px;
+          font-size: 9px;
+        }
+
+        .colorInfo {
+          gap: 8px;
+          margin: 7px 0;
+          font-size: 9px;
+        }
+
+        .colorInfo span {
+          gap: 4px;
+        }
+
+        .colorInfo i {
+          width: 9px;
+          height: 9px;
+        }
+
+        .cardButtons {
+          gap: 6px;
+        }
+
+        .cardButtons button {
+          padding: 6px 7px;
+          font-size: 9px;
+        }
+
+        .emptyState {
+          padding: 22px 12px;
+          border-radius: 9px;
+          font-size: 11px;
+        }
+
+        @media (max-width: 900px) and (orientation: landscape), (max-height: 500px) {
+          .planner-navbar-inner {
+            padding: 6px 10px 5px;
+          }
+
+          .planner-brand-mark {
+            width: 34px;
+            height: 34px;
+            font-size: 16px;
+          }
+
+          .planner-brand-title {
+            font-size: 15px;
+          }
+
+          .planner-navigation {
+            height: 34px;
+            min-height: 34px;
+            margin-top: 6px;
+            padding: 3px 5px;
+            border-radius: 12px;
+          }
+
+          .planner-nav-link {
+            padding: 6px 10px;
+            font-size: 11px;
+          }
+
+          .page-heading {
+            padding: 9px 14px 6px;
+          }
+
+          .page-heading h1,
+          h1 {
+            font-size: 18px;
+          }
+
+          .content {
+            grid-template-columns: minmax(305px, 335px) minmax(0, 1fr);
+            gap: 9px;
+            padding: 0 12px 12px;
+          }
+
+          .formCard,
+          .themesSection {
+            padding: 9px;
+            border-radius: 10px;
+          }
+
+          .formCard h2,
+          .themesSection h2,
+          h2 {
+            font-size: 13px;
+            margin-bottom: 6px;
+          }
+
+          .formCard form {
+            gap: 6px 7px;
+          }
+
+          label {
+            font-size: 9px;
+          }
+
+          input,
+          textarea,
+          select {
+            padding: 5px 7px;
+            font-size: 10px;
+          }
+
+          textarea {
+            min-height: 30px;
+            height: 30px;
+          }
+
+          input[type="color"] {
+            height: 26px;
+          }
+
+          button {
+            padding: 5px 8px;
+            font-size: 9px;
+          }
+
+          .themeGrid {
+            grid-template-columns: repeat(auto-fill, minmax(135px, 165px));
+            gap: 7px;
+          }
+
+          .colorPreview {
+            height: 38px;
+          }
+
+          .themeContent {
+            padding: 7px;
+          }
+        }
+
+        /* Prevent horizontal clipping on narrower portrait screens */
+        @media (max-width: 700px) and (orientation: portrait) {
+          .planner-navigation {
+            overflow-x: auto;
+            justify-content: flex-start;
+          }
+
+          .content {
+            grid-template-columns: 1fr;
+          }
+
+          .formCard form {
+            display: grid;
+            grid-template-columns: 1fr;
+          }
+
+          .formCard .field,
+          .formCard .colorRow .field {
+            grid-column: 1;
           }
         }
 
