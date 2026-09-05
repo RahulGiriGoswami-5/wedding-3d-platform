@@ -681,14 +681,14 @@ export default function MatchPage() {
           margin: 0 auto;
           padding: 0 24px;
           display: grid;
-          grid-template-columns: 320px minmax(0, 1fr);
+          grid-template-columns: minmax(640px, 1.1fr) minmax(420px, 0.9fr);
           gap: 18px;
           align-items: start;
         }
 
         .requirements-card {
           position: sticky;
-          top: 80px;
+          top: 104px;
           padding: 18px;
         }
 
@@ -744,6 +744,21 @@ export default function MatchPage() {
           font-size: 12px;
         }
 
+        .requirements-card form {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px;
+        }
+
+        .requirements-card .form-group {
+          margin-bottom: 0;
+        }
+
+        .requirements-card .form-group:nth-of-type(3),
+        .requirements-card .form-group:nth-of-type(7) {
+          grid-column: 1 / -1;
+        }
+
         .form-group {
           margin-bottom: 13px;
         }
@@ -778,9 +793,15 @@ export default function MatchPage() {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 10px;
+          grid-column: 1 / -1;
+        }
+
+        .requirements-card .two-column .form-group {
+          margin-bottom: 0;
         }
 
         .match-button {
+          grid-column: 1 / -1;
           width: 100%;
           padding: 12px;
         }
@@ -793,7 +814,7 @@ export default function MatchPage() {
         }
 
         .info-box {
-          margin-top: 18px;
+          margin-top: 14px;
           padding: 13px;
           background: #eff6ff;
           border: 1px solid #dbeafe;
@@ -1158,7 +1179,7 @@ export default function MatchPage() {
           font-size: 12px;
         }
 
-        @media (max-width: 1000px) {
+        @media (max-width: 1120px) {
           .top-header {
             padding: 9px 16px;
             align-items: flex-start;
@@ -1177,6 +1198,10 @@ export default function MatchPage() {
           .requirements-card {
             position: static;
           }
+
+          .requirements-card form {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
         }
 
         @media (max-width: 700px) {
@@ -1184,6 +1209,17 @@ export default function MatchPage() {
           .match-layout {
             padding-left: 14px;
             padding-right: 14px;
+          }
+
+          .requirements-card form {
+            grid-template-columns: 1fr;
+          }
+
+          .requirements-card .form-group:nth-of-type(3),
+          .requirements-card .form-group:nth-of-type(7),
+          .two-column,
+          .match-button {
+            grid-column: auto;
           }
 
           .two-column {

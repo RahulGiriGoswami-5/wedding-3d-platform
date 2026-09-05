@@ -796,39 +796,45 @@ export default function VenuesPage() {
           background-size: 24px 24px;
         }
 
-        :global(html[data-theme="dark"]) .topbar {
-          background: rgba(24, 34, 50, 0.97);
-          border-bottom-color: #2d3d56;
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+        /* Dark-mode navigation. These selectors match the actual navbar classes above,
+           so the complete Venues navbar switches with html[data-theme]. */
+        :global(html[data-theme="dark"]) .planner-navbar {
+          background: rgba(20, 29, 43, 0.97);
+          border-bottom-color: #33445e;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
         }
 
-        :global(html[data-theme="dark"]) .brand-title {
+        :global(html[data-theme="dark"]) .planner-brand {
           color: #eef4ff;
         }
 
-        :global(html[data-theme="dark"]) .brand-subtitle {
+        :global(html[data-theme="dark"]) .planner-brand-title {
+          color: #eef4ff;
+        }
+
+        :global(html[data-theme="dark"]) .planner-brand-subtitle {
           color: #aab8cc;
         }
 
-        :global(html[data-theme="dark"]) .main-navigation {
+        :global(html[data-theme="dark"]) .planner-navigation {
           border-color: #3b4d69;
-          background: linear-gradient(180deg, #263248, #202c40);
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+          background: linear-gradient(180deg, rgba(38, 50, 72, 0.98), rgba(29, 40, 58, 0.98));
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 4px 12px rgba(0, 0, 0, 0.16);
         }
 
-        :global(html[data-theme="dark"]) .top-nav-link {
+        :global(html[data-theme="dark"]) .planner-nav-link {
           color: #c7d2e4;
         }
 
-        :global(html[data-theme="dark"]) .top-nav-link:hover {
+        :global(html[data-theme="dark"]) .planner-nav-link:hover {
           color: #ffffff;
           background: #30415d;
         }
 
-        :global(html[data-theme="dark"]) .top-nav-link.active {
+        :global(html[data-theme="dark"]) .planner-nav-active {
           color: #ffffff;
-          background: #3b6098;
-          box-shadow: 0 5px 16px rgba(0, 0, 0, 0.24);
+          background: linear-gradient(180deg, #3569bd, #2856a5);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.1);
         }
 
         :global(html[data-theme="dark"]) .theme-toggle {
