@@ -3,6 +3,7 @@
 import { Canvas, ThreeEvent, useLoader, useThree } from "@react-three/fiber";
 import {
   Grid,
+  Html,
   Line,
   OrbitControls,
   OrthographicCamera,
@@ -716,18 +717,37 @@ function VenueModel({
 
 function VenueModelNotice({ url }: { url: string | null }) {
   const [status, setStatus] = useState<ModelLoadStatus>("checking");
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    let hideTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const showTemporarily = (nextStatus: ModelLoadStatus) => {
+      if (cancelled) return;
+      setStatus(nextStatus);
+      setVisible(true);
+      hideTimer = setTimeout(() => {
+        if (!cancelled) setVisible(false);
+      }, 2000);
+    };
+
+    setVisible(false);
 
     if (!url) {
-      setStatus("missing");
-      return;
+      showTemporarily("missing");
+      return () => {
+        cancelled = true;
+        if (hideTimer) clearTimeout(hideTimer);
+      };
     }
 
     if (!isSupportedVenueModel(url)) {
-      setStatus("unsupported");
-      return;
+      showTemporarily("unsupported");
+      return () => {
+        cancelled = true;
+        if (hideTimer) clearTimeout(hideTimer);
+      };
     }
 
     setStatus("checking");
@@ -735,41 +755,47 @@ function VenueModelNotice({ url }: { url: string | null }) {
     fetch(url, { method: "HEAD", cache: "no-store" })
       .then(response => {
         if (!response.ok) throw new Error("Model is unavailable");
-        if (!cancelled) setStatus("ready");
+        if (!cancelled) {
+          setStatus("ready");
+          setVisible(false);
+        }
       })
       .catch(() => {
-        if (!cancelled) setStatus("missing");
+        showTemporarily("missing");
       });
 
     return () => {
       cancelled = true;
+      if (hideTimer) clearTimeout(hideTimer);
     };
   }, [url]);
 
-  if (status === "checking" || status === "ready") return null;
+  if (!visible || status === "checking" || status === "ready") return null;
 
   const message = status === "unsupported"
-    ? "Unsupported venue model format. Use GLB, GLTF, FBX or OBJ."
-    : "Venue model file was not found. The editor is still working safely.";
+    ? "Unsupported venue model format."
+    : "Venue model file was not found. Editor is still working safely.";
 
   return (
     <div
       style={{
         position: "absolute",
-        top: 16,
+        top: 8,
         left: "50%",
         transform: "translateX(-50%)",
         zIndex: 40,
         background: "rgba(255, 255, 255, 0.96)",
         color: "#991b1b",
         border: "1px solid #fecaca",
-        borderRadius: 10,
-        padding: "10px 14px",
-        fontSize: 12,
+        borderRadius: 8,
+        padding: "6px 10px",
+        fontSize: 9,
+        lineHeight: 1.35,
         fontWeight: 700,
-        boxShadow: "0 6px 20px rgba(15, 23, 42, 0.12)",
-        maxWidth: "80%",
+        boxShadow: "0 4px 14px rgba(15, 23, 42, 0.10)",
+        maxWidth: "70%",
         textAlign: "center",
+        pointerEvents: "none",
       }}
     >
       {message}
@@ -1645,46 +1671,20 @@ function HtmlDistanceLabel({
   position,
   distance,
 }: {
-  position: [
-    number,
-    number,
-    number
-  ];
+  position: [number, number, number];
   distance: number;
 }) {
   return (
-    <div
-      style={{
-        position:
-          "absolute",
-
-        left: "50%",
-
-        top: "50%",
-
-        transform:
-          "translate(-50%, -50%)",
-
-        pointerEvents:
-          "none",
-      }}
+    <Html
+      position={position}
+      center
+      transform
+      style={{ pointerEvents: "none" }}
     >
-      <div
-        className="distance-label"
-        style={{
-          position:
-            "absolute",
-
-          left:
-            position[0] * 20,
-
-          top:
-            position[2] * 20,
-        }}
-      >
+      <div className="distance-label">
         {distance.toFixed(2)} m
       </div>
-    </div>
+    </Html>
   );
 }
 
@@ -2740,13 +2740,21 @@ function PropertiesPanel({
           ↻ Rotate
         </button>
 
-        <button className="delete-button" onClick={deleteSelected}>
-          🗑 Delete This Item
+        <button className="delete-button delete-single-item-button" onClick={deleteSelected}>
+          <span className="delete-item-preview" aria-hidden="true">
+            {selected.imageUrl ? (
+              <img src={selected.imageUrl} alt="" />
+            ) : (
+              <span>{ICONS[selected.type]}</span>
+            )}
+          </span>
+          <span className="delete-item-action">Delete</span>
         </button>
 
         {selectedCount > 1 && (
           <button className="delete-button delete-all-button" onClick={deleteAllSelected}>
-            🗑 Delete All Selected ({selectedCount})
+            <span aria-hidden="true">🗑</span>
+            <span>Delete All</span>
           </button>
         )}
       </div>
@@ -5653,6 +5661,426 @@ useEffect(() => {
           }
         }
 
+
+        /* =====================================================
+           MOBILE + TABLET RESPONSIVE OPTIMIZATION
+           These rules preserve the desktop editor and only
+           reorganize the existing controls on smaller screens.
+        ===================================================== */
+
+        html,
+        body,
+        #__next {
+          max-width: 100%;
+        }
+
+        .editor,
+        .editor-body,
+        .workspace {
+          min-width: 0;
+        }
+
+        @media (max-width: 760px) {
+          html,
+          body {
+            overflow: hidden;
+            overscroll-behavior: none;
+          }
+
+          .topbar {
+            min-height: auto;
+            gap: 8px;
+            padding: 8px 10px;
+            align-items: center;
+            flex-wrap: wrap;
+          }
+
+          .brand {
+            flex: 1 1 auto;
+            min-width: 0;
+            gap: 8px;
+          }
+
+          .brand-icon {
+            width: 36px;
+            height: 36px;
+            font-size: 17px;
+          }
+
+          .brand-title {
+            max-width: min(44vw, 220px);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 14px;
+          }
+
+          .topbar > .theme-toggle {
+            width: 40px;
+            height: 40px;
+            flex: 0 0 40px;
+            margin-left: 0 !important;
+          }
+
+          .top-actions {
+            order: 2;
+            width: 100%;
+            flex: 1 0 100%;
+            justify-content: flex-start;
+            gap: 7px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding: 2px 0 5px;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+          }
+
+          .top-actions::-webkit-scrollbar,
+          .main-navigation::-webkit-scrollbar {
+            display: none;
+          }
+
+          .top-actions > button,
+          .top-actions > div {
+            flex: 0 0 auto;
+          }
+
+          .top-actions > button:first-child {
+            max-width: min(52vw, 240px);
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+
+          .preview-button {
+            width: 40px;
+            height: 40px;
+            flex-basis: 40px;
+          }
+
+          .save-button {
+            padding: 10px 12px;
+            min-height: 40px;
+          }
+
+          .view-toggle button {
+            min-height: 40px;
+            padding: 9px 12px;
+          }
+
+          .main-navigation {
+            order: 3;
+            width: 100%;
+            flex: 1 0 100%;
+            justify-content: flex-start;
+            gap: 4px;
+            padding: 4px;
+            border-radius: 10px;
+            scroll-snap-type: x proximity;
+          }
+
+          .top-nav-link {
+            scroll-snap-align: start;
+            padding: 10px 11px;
+            min-height: 40px;
+            display: inline-flex;
+            align-items: center;
+          }
+
+          .editor-body {
+            position: relative;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+          }
+
+          .left-nav {
+            width: 100%;
+            height: 58px;
+            min-height: 58px;
+            flex-direction: row;
+            align-items: stretch;
+            justify-content: flex-start;
+            gap: 5px;
+            padding: 6px 8px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            border-right: none;
+            border-bottom: 1px solid #dfe2e6;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+          }
+
+          .left-nav::-webkit-scrollbar {
+            display: none;
+          }
+
+          .nav-item {
+            width: auto;
+            min-width: 68px;
+            flex: 0 0 auto;
+            min-height: 44px;
+            padding: 5px 8px;
+            flex-direction: row;
+            justify-content: center;
+            gap: 5px;
+            font-size: 10px;
+          }
+
+          .nav-icon {
+            font-size: 15px;
+          }
+
+          .nav-spacer {
+            display: none;
+          }
+
+          .build-panel {
+            width: 100%;
+            max-height: min(36vh, 300px);
+            min-height: 0;
+            flex: 0 0 auto;
+            border-right: none;
+            border-bottom: 1px solid #dfe2e6;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+
+          .panel-heading {
+            padding: 12px 16px;
+            font-size: 15px;
+          }
+
+          .panel-content {
+            padding: 12px;
+          }
+
+          .properties-panel {
+            display: none;
+          }
+
+          .workspace {
+            width: 100%;
+            min-height: 0;
+            flex: 1 1 auto;
+          }
+
+          .workspace-title {
+            top: 10px;
+            left: 10px;
+            max-width: calc(100% - 20px);
+            padding: 7px 9px;
+          }
+
+          .workspace-title strong {
+            max-width: min(60vw, 280px);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
+          .plan-info {
+            display: none;
+          }
+
+          .chair-group-controls {
+            top: 10px;
+            right: 10px;
+            max-width: calc(100% - 20px);
+          }
+
+          .bottom-toolbar {
+            left: 50%;
+            right: auto;
+            bottom: 10px;
+            width: calc(100% - 20px);
+            max-width: 430px;
+            transform: translateX(-50%);
+            justify-content: flex-start;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding: 4px;
+            scrollbar-width: none;
+          }
+
+          .bottom-toolbar::-webkit-scrollbar {
+            display: none;
+          }
+
+          .bottom-tool {
+            min-width: 60px;
+            min-height: 44px;
+            flex: 0 0 auto;
+          }
+
+          .scale-display {
+            flex: 0 0 auto;
+            margin-left: 4px;
+          }
+
+          .theme-modal-card {
+            width: min(100%, 760px) !important;
+            max-height: calc(100dvh - 24px) !important;
+            padding: 16px !important;
+            border-radius: 16px !important;
+          }
+
+          .theme-modal-card > div:first-child {
+            align-items: flex-start !important;
+            gap: 10px !important;
+          }
+
+          .theme-modal-card h2 {
+            font-size: 18px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .topbar {
+            padding: 7px 8px;
+          }
+
+          .brand-icon {
+            width: 34px;
+            height: 34px;
+          }
+
+          .brand-title {
+            max-width: 52vw;
+            font-size: 13px;
+          }
+
+          .top-actions {
+            gap: 6px;
+          }
+
+          .top-actions > button:first-child {
+            max-width: 48vw;
+            font-size: 11px !important;
+          }
+
+          .main-navigation {
+            border-radius: 9px;
+          }
+
+          .top-nav-link {
+            padding: 9px 10px;
+            font-size: 10px;
+          }
+
+          .left-nav {
+            height: 54px;
+            min-height: 54px;
+            padding: 5px 6px;
+          }
+
+          .nav-item {
+            min-width: 64px;
+            min-height: 42px;
+            padding: 5px 6px;
+            font-size: 9px;
+          }
+
+          .build-panel {
+            max-height: min(34vh, 250px);
+          }
+
+          .panel-heading {
+            padding: 10px 12px;
+          }
+
+          .panel-content {
+            padding: 10px;
+          }
+
+          .element-button,
+          .tool-button {
+            min-height: 44px;
+          }
+
+          .chair-group-controls {
+            top: 8px;
+            right: 8px;
+          }
+
+          .move-all-chairs-button,
+          .move-chairs-individually-button {
+            max-width: 180px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+
+          .workspace-title {
+            top: 8px;
+            left: 8px;
+          }
+
+          .workspace-theme-status {
+            min-width: 0;
+            max-width: calc(100vw - 16px);
+          }
+
+          .bottom-toolbar {
+            bottom: 8px;
+            width: calc(100% - 16px);
+          }
+
+          .preview-toolbar {
+            min-height: 62px;
+            gap: 8px;
+            padding: 8px 10px;
+          }
+
+          .preview-toolbar strong {
+            max-width: 52vw;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 15px;
+          }
+
+          .preview-close-button {
+            min-height: 40px;
+            padding: 9px 11px;
+            font-size: 11px;
+          }
+        }
+
+        @media (max-width: 380px) {
+          .brand-title {
+            max-width: 45vw;
+          }
+
+          .top-actions > button:first-child {
+            max-width: 44vw;
+          }
+
+          .build-panel {
+            max-height: min(32vh, 220px);
+          }
+
+          .workspace-title {
+            display: none;
+          }
+
+          .nav-item {
+            min-width: 60px;
+          }
+        }
+
+        @media (pointer: coarse) {
+          .top-nav-link,
+          .nav-item,
+          .element-button,
+          .tool-button,
+          .save-button,
+          .preview-button,
+          .preview-close-button,
+          .move-all-chairs-button,
+          .move-chairs-individually-button {
+            touch-action: manipulation;
+          }
+        }
+
         /* =====================================================
            READ-ONLY 3D PREVIEW
         ===================================================== */
@@ -5803,9 +6231,1330 @@ useEffect(() => {
             display: none;
           }
         }
-      `}
 
-</style>
+        /* =====================================================
+           FINAL MOBILE EDITOR LAYOUT
+           Keep the desktop layout untouched. On phones the side
+           panel becomes an overlay so the 3D workspace always has
+           usable space instead of being pushed below the fold.
+        ===================================================== */
+        @media (max-width: 760px) {
+          html,
+          body,
+          #__next {
+            width: 100%;
+            min-width: 0;
+            height: 100%;
+            min-height: 100%;
+            overflow: hidden;
+          }
+
+          .editor {
+            width: 100%;
+            height: 100dvh;
+            min-height: 100dvh;
+            overflow: hidden;
+          }
+
+          /* Compact three-row header: brand, editor actions, navigation. */
+          .topbar {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 42px;
+            grid-template-areas:
+              "brand theme"
+              "actions actions"
+              "navigation navigation";
+            gap: 6px;
+            padding: 7px 8px 8px;
+            flex: 0 0 auto;
+          }
+
+          .brand {
+            grid-area: brand;
+            min-height: 42px;
+            align-items: center;
+          }
+
+          .brand-icon {
+            width: 34px;
+            height: 34px;
+          }
+
+          .brand-title {
+            max-width: 62vw;
+            font-size: 14px;
+          }
+
+          .brand-subtitle {
+            display: none;
+          }
+
+          .topbar > .theme-toggle {
+            grid-area: theme;
+            width: 42px;
+            height: 42px;
+            min-height: 42px;
+            margin: 0 !important;
+            justify-self: end;
+          }
+
+          .top-actions {
+            grid-area: actions;
+            order: initial;
+            width: 100%;
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 6px;
+            padding: 0;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: none;
+          }
+
+          .top-actions > button:first-child {
+            flex: 0 0 82px;
+            width: 82px;
+            min-width: 82px;
+            max-width: 82px;
+            min-height: 40px;
+            padding: 8px !important;
+            font-size: 0 !important;
+            overflow: visible;
+          }
+
+          .top-actions > button:first-child::after {
+            content: "✨ Theme";
+            font-size: 11px;
+            font-weight: 800;
+          }
+
+          .saved-status {
+            display: none;
+          }
+
+          .preview-button {
+            width: 40px;
+            height: 40px;
+            min-width: 40px;
+            flex: 0 0 40px;
+          }
+
+          .save-button {
+            flex: 0 0 82px;
+            width: 82px;
+            min-width: 82px;
+            min-height: 40px;
+            padding: 8px !important;
+            font-size: 0 !important;
+          }
+
+          .save-button::after {
+            content: "💾 Save";
+            font-size: 11px;
+            font-weight: 800;
+          }
+
+          .view-toggle {
+            flex: 0 0 auto;
+            min-height: 40px;
+          }
+
+          .view-toggle button {
+            min-width: 42px;
+            min-height: 40px;
+            padding: 8px 10px;
+          }
+
+          .main-navigation {
+            grid-area: navigation;
+            order: initial;
+            width: 100%;
+            min-width: 0;
+            flex: none;
+            min-height: 44px;
+            justify-content: flex-start;
+            padding: 3px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: none;
+          }
+
+          .main-navigation::-webkit-scrollbar,
+          .top-actions::-webkit-scrollbar {
+            display: none;
+          }
+
+          .top-nav-link {
+            min-height: 36px;
+            padding: 8px 10px;
+            font-size: 10px;
+          }
+
+          .editor-body {
+            position: relative;
+            flex: 1 1 auto;
+            min-height: 0;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+          }
+
+          .left-nav {
+            position: relative;
+            z-index: 45;
+            width: 100%;
+            height: 52px;
+            min-height: 52px;
+            padding: 5px 6px;
+            flex: 0 0 52px;
+            flex-direction: row;
+            overflow-x: auto;
+            overflow-y: hidden;
+          }
+
+          .nav-item {
+            min-width: 66px;
+            min-height: 40px;
+            padding: 5px 7px;
+          }
+
+          /* The content panel floats over the workspace instead of consuming
+             most of the phone height. It remains fully scrollable and usable. */
+          .build-panel {
+            position: absolute;
+            top: 52px;
+            left: 0;
+            right: 0;
+            width: 100%;
+            max-height: min(190px, 34dvh);
+            min-height: 0;
+            z-index: 40;
+            flex: none;
+            border-right: none;
+            border-bottom: 1px solid #dfe2e6;
+            border-radius: 0 0 14px 14px;
+            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+            overflow-y: auto;
+            overscroll-behavior: contain;
+          }
+
+          .panel-heading {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            padding: 10px 14px;
+            font-size: 14px;
+            background: inherit;
+          }
+
+          .panel-content {
+            padding: 10px 12px 14px;
+          }
+
+          .properties-panel {
+            display: none;
+          }
+
+          .workspace {
+            position: relative;
+            width: 100%;
+            flex: 1 1 auto;
+            min-height: 0;
+            z-index: 1;
+          }
+
+          .workspace-title {
+            top: 10px;
+            left: 10px;
+            z-index: 25;
+            max-width: calc(100% - 20px);
+          }
+
+          .chair-group-controls {
+            top: auto;
+            right: 10px;
+            bottom: 70px;
+            z-index: 30;
+            max-width: calc(100% - 20px);
+          }
+
+          .move-all-chairs-button,
+          .move-chairs-individually-button {
+            max-width: min(220px, calc(100vw - 20px));
+          }
+
+          .bottom-toolbar {
+            z-index: 35;
+            bottom: 8px;
+          }
+
+          .plan-info {
+            display: none;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .topbar {
+            gap: 5px;
+            padding: 6px;
+          }
+
+          .brand-title {
+            max-width: 58vw;
+            font-size: 13px;
+          }
+
+          .top-actions {
+            gap: 5px;
+          }
+
+          .top-actions > button:first-child {
+            flex-basis: 74px;
+            width: 74px;
+            min-width: 74px;
+            max-width: 74px;
+          }
+
+          .save-button {
+            flex-basis: 74px;
+            width: 74px;
+            min-width: 74px;
+          }
+
+          .main-navigation {
+            min-height: 42px;
+          }
+
+          .top-nav-link {
+            min-height: 34px;
+            padding: 7px 9px;
+          }
+
+          .left-nav {
+            height: 48px;
+            min-height: 48px;
+            flex-basis: 48px;
+          }
+
+          .nav-item {
+            min-width: 62px;
+            min-height: 38px;
+            font-size: 9px;
+          }
+
+          .build-panel {
+            top: 48px;
+            max-height: min(170px, 32dvh);
+          }
+
+          .workspace-title {
+            padding: 6px 8px;
+          }
+
+          .workspace-title strong {
+            max-width: 54vw;
+          }
+        }
+
+        /* =====================================================
+           PHONE LANDSCAPE MODE
+           The 3D editor needs horizontal workspace. Phones cannot
+           be physically rotated by CSS, so portrait mode shows a
+           rotate prompt and the full editor automatically uses this
+           layout as soon as the device is turned sideways.
+        ===================================================== */
+        @media (max-width: 500px) and (orientation: portrait) {
+          .editor::after {
+            content: "↻ Rotate your phone sideways to use the Wedding Planner";
+            position: fixed;
+            inset: 0;
+            z-index: 5000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 32px;
+            text-align: center;
+            color: #ffffff;
+            background: rgba(15, 23, 42, 0.97);
+            font-size: 18px;
+            font-weight: 800;
+            line-height: 1.6;
+          }
+        }
+
+        @media (max-width: 950px) and (max-height: 500px) and (orientation: landscape) {
+          html,
+          body,
+          #__next {
+            width: 100vw;
+            height: 100dvh;
+            overflow: hidden;
+          }
+
+          .editor {
+            width: 100vw;
+            height: 100dvh;
+            min-height: 0;
+          }
+
+          /* One compact horizontal control strip. */
+          .topbar {
+            display: grid;
+            grid-template-columns: minmax(140px, 1fr) auto 38px;
+            grid-template-areas:
+              "brand actions theme"
+              "navigation navigation navigation";
+            gap: 4px 8px;
+            padding: 5px 8px;
+            min-height: 0;
+          }
+
+          .topbar > .brand {
+            grid-area: brand;
+          }
+
+          .topbar > .main-navigation {
+            grid-area: navigation;
+          }
+
+          .topbar > .top-actions {
+            grid-area: actions;
+          }
+
+          .topbar > .theme-toggle {
+            grid-area: theme;
+            margin-left: 0 !important;
+          }
+
+          .brand {
+            min-height: 38px;
+          }
+
+          .brand-icon {
+            width: 32px;
+            height: 32px;
+            font-size: 16px;
+          }
+
+          .brand-title {
+            max-width: none;
+            font-size: 13px;
+          }
+
+          .topbar > .theme-toggle {
+            width: 38px;
+            height: 38px;
+            min-height: 38px;
+          }
+
+          .top-actions {
+            width: auto;
+            max-width: 430px;
+            justify-content: flex-end;
+            overflow: hidden;
+            gap: 5px;
+            min-width: 0;
+          }
+
+          /* The ready/saving label is useful on desktop but consumes
+             valuable horizontal space on a 844 × 390 phone. */
+          .saved-status {
+            display: none;
+          }
+
+          .top-actions > button:first-child,
+          .save-button {
+            flex: 0 0 auto;
+            width: auto;
+            min-width: 0;
+            max-width: none;
+            min-height: 38px;
+            padding: 7px 9px !important;
+            font-size: 0 !important;
+          }
+
+          .top-actions > button:first-child::after {
+            content: "✨ Theme";
+            font-size: 10px;
+          }
+
+          .save-button::after {
+            content: "💾 Save";
+            font-size: 10px;
+          }
+
+          .preview-button {
+            width: 38px;
+            min-width: 38px;
+            height: 38px;
+            flex-basis: 38px;
+          }
+
+          .view-toggle {
+            min-height: 38px;
+          }
+
+          .view-toggle button {
+            min-width: 38px;
+            min-height: 38px;
+            padding: 7px 9px;
+          }
+
+          .main-navigation {
+            min-height: 38px;
+            padding: 2px;
+            justify-content: center;
+            overflow-x: auto;
+          }
+
+          .top-nav-link {
+            min-height: 32px;
+            padding: 6px 11px;
+            font-size: 10px;
+          }
+
+          /* Restore the editor's true horizontal workspace. */
+          .editor-body {
+            flex-direction: row;
+            min-height: 0;
+          }
+
+          .left-nav {
+            width: 58px;
+            min-width: 58px;
+            height: auto;
+            min-height: 0;
+            flex: 0 0 58px;
+            flex-direction: column;
+            overflow-x: hidden;
+            overflow-y: auto;
+            padding: 5px;
+          }
+
+          .nav-item {
+            width: 100%;
+            min-width: 0;
+            min-height: 50px;
+            padding: 6px 4px;
+            font-size: 8px;
+          }
+
+          /* The build panel opens beside the vertical tool rail and
+             overlays only part of the canvas instead of using page height. */
+          .build-panel {
+            top: 0;
+            bottom: 0;
+            left: 58px;
+            right: auto;
+            width: min(300px, 42vw);
+            max-height: none;
+            height: auto;
+            border-bottom: none;
+            border-right: 1px solid #dfe2e6;
+            border-radius: 0;
+            box-shadow: 10px 0 24px rgba(15, 23, 42, 0.12);
+          }
+
+          .panel-heading {
+            padding: 8px 10px;
+            font-size: 13px;
+          }
+
+          .panel-content {
+            padding: 8px 10px 12px;
+          }
+
+          .workspace {
+            flex: 1 1 auto;
+            min-width: 0;
+            min-height: 0;
+          }
+
+          .workspace-title {
+            top: 8px;
+            left: 8px;
+          }
+
+          .workspace-title strong {
+            max-width: 32vw;
+          }
+
+          .chair-group-controls {
+            right: 8px;
+            bottom: 56px;
+          }
+
+          .bottom-toolbar {
+            bottom: 6px;
+            max-width: calc(100% - 16px);
+            overflow-x: auto;
+          }
+
+          .bottom-toolbar::-webkit-scrollbar {
+            display: none;
+          }
+
+          /* =====================================================
+             BASELINE PHONE LANDSCAPE: 844 × 390
+             This is the primary design target for modern phones.
+          ===================================================== */
+          @media (min-width: 800px) and (max-width: 900px) and (min-height: 360px) and (max-height: 430px) {
+            .topbar {
+              grid-template-columns: minmax(145px, 1fr) auto 38px;
+              gap: 3px 6px;
+              padding: 4px 7px;
+            }
+
+            .brand {
+              min-height: 34px;
+            }
+
+            .brand-icon {
+              width: 30px;
+              height: 30px;
+              font-size: 15px;
+            }
+
+            .brand-title {
+              font-size: 12px;
+            }
+
+            .top-actions > button:first-child,
+            .save-button {
+              min-height: 34px;
+              padding: 6px 8px !important;
+            }
+
+            .preview-button,
+            .topbar > .theme-toggle {
+              width: 34px;
+              min-width: 34px;
+              height: 34px;
+              min-height: 34px;
+            }
+
+            .view-toggle,
+            .view-toggle button {
+              min-height: 34px;
+            }
+
+            .view-toggle button {
+              min-width: 34px;
+              padding: 6px 8px;
+            }
+
+            .main-navigation {
+              min-height: 34px;
+            }
+
+            .top-nav-link {
+              min-height: 28px;
+              padding: 5px 10px;
+              font-size: 9px;
+            }
+
+            .left-nav {
+              width: 54px;
+              min-width: 54px;
+              flex-basis: 54px;
+              padding: 4px;
+            }
+
+            .nav-item {
+              min-height: 43px;
+              padding: 4px 2px;
+              gap: 2px;
+              font-size: 7px;
+            }
+
+            .nav-icon {
+              font-size: 15px;
+            }
+
+            .build-panel {
+              left: 54px;
+              width: min(285px, 38vw);
+            }
+
+            .workspace-title {
+              padding: 6px 8px;
+            }
+
+            .workspace-title strong {
+              max-width: 260px;
+              font-size: 11px;
+            }
+
+            .bottom-toolbar {
+              transform: scale(0.9);
+              transform-origin: bottom center;
+            }
+          }
+        }
+
+        /* =====================================================
+           FINAL 844 × 390 MOBILE LANDSCAPE COMPACT OVERRIDES
+        ===================================================== */
+        @media (max-width: 950px) and (max-height: 500px) and (orientation: landscape) {
+          /* Remove the Project / Build / Info / Objects vertical rail. */
+          .left-nav {
+            display: none !important;
+          }
+
+          /* Keep the Build panel available without sacrificing a permanent
+             vertical navigation column. */
+          .editor-body {
+            position: relative;
+          }
+
+          .build-panel {
+            left: 0 !important;
+            width: min(280px, 34vw) !important;
+            z-index: 42;
+          }
+
+          /* Compact inventory cards, images, icons and typography. */
+          .build-panel .section-title {
+            margin-bottom: 6px !important;
+            font-size: 10px !important;
+          }
+
+          .element-button {
+            min-height: 0 !important;
+            padding: 5px !important;
+            gap: 6px !important;
+          }
+
+          .element-button > span:first-child {
+            width: 34px !important;
+            height: 34px !important;
+          }
+
+          .element-button > span:first-child > span {
+            font-size: 15px !important;
+          }
+
+          .element-name {
+            font-size: 10px !important;
+          }
+
+          .element-category {
+            font-size: 8px !important;
+            margin-top: 1px !important;
+          }
+
+          .element-dims,
+          .element-button > span:nth-child(2) > span:last-child {
+            font-size: 7px !important;
+            margin-top: 1px !important;
+          }
+
+          .add-plus {
+            width: 18px !important;
+            height: 18px !important;
+            font-size: 12px !important;
+          }
+
+          /* Compact the quantity chooser for every inventory item. */
+          .bulk-item-panel {
+            margin-top: 4px !important;
+            margin-bottom: 3px !important;
+            padding: 7px !important;
+            gap: 6px !important;
+            border-radius: 8px !important;
+          }
+
+          .bulk-item-panel span {
+            font-size: 9px !important;
+          }
+
+          .bulk-item-panel button {
+            min-height: 24px !important;
+            padding: 4px 5px !important;
+            font-size: 8px !important;
+          }
+
+          .bulk-item-panel input[type="number"] {
+            width: 44px !important;
+            height: 24px !important;
+            font-size: 10px !important;
+          }
+
+          .bulk-item-panel input[type="range"] {
+            height: 14px !important;
+          }
+
+          /* Smaller Build tools and group movement controls. */
+          .tool-button {
+            min-height: 32px !important;
+            padding: 6px 7px !important;
+            gap: 5px !important;
+            font-size: 9px !important;
+          }
+
+          .tool-button span:first-child {
+            font-size: 12px !important;
+          }
+
+          .tip-box {
+            padding: 7px !important;
+            font-size: 8px !important;
+          }
+
+          .tip-box p {
+            margin: 3px 0 !important;
+          }
+
+          /* Bring back the selected-item window as a compact delete menu. */
+          .properties-panel {
+            display: none !important;
+          }
+
+          .properties-panel:not(.empty-properties) {
+            display: block !important;
+            position: absolute !important;
+            right: 8px !important;
+            top: 8px !important;
+            width: 155px !important;
+            min-height: 0 !important;
+            max-height: calc(100% - 16px) !important;
+            padding: 7px !important;
+            z-index: 55 !important;
+            overflow: hidden !important;
+            border: 1px solid #dfe2e6 !important;
+            border-radius: 9px !important;
+            background: rgba(255, 255, 255, 0.97) !important;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12) !important;
+          }
+
+          .properties-panel:not(.empty-properties) .properties-title,
+          .properties-panel:not(.empty-properties) .selected-card,
+          .properties-panel:not(.empty-properties) .property-section {
+            display: none !important;
+          }
+
+          .properties-panel:not(.empty-properties) .property-actions {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 5px !important;
+            margin: 0 !important;
+          }
+
+          .properties-panel:not(.empty-properties) .rotate-button {
+            display: none !important;
+          }
+
+          .properties-panel:not(.empty-properties) .delete-button {
+            width: 100% !important;
+            flex: none !important;
+            padding: 7px 6px !important;
+            font-size: 9px !important;
+            line-height: 1.2 !important;
+          }
+
+          /* Make workspace labels and the measurement toolbar compact. */
+          .workspace-title {
+            top: 6px !important;
+            left: 6px !important;
+            padding: 5px 7px !important;
+            gap: 1px !important;
+          }
+
+          .workspace-title span {
+            font-size: 7px !important;
+          }
+
+          .workspace-title strong {
+            max-width: 190px !important;
+            font-size: 9px !important;
+          }
+
+          .bottom-toolbar {
+            bottom: 5px !important;
+            left: 50% !important;
+            transform: translateX(-50%) !important;
+            padding: 3px !important;
+            border-radius: 7px !important;
+          }
+
+          .bottom-tool {
+            min-width: 44px !important;
+            padding: 4px 5px !important;
+            gap: 1px !important;
+            font-size: 7px !important;
+          }
+
+          .toolbar-divider {
+            height: 22px !important;
+            margin: 0 1px !important;
+          }
+
+          .scale-display {
+            margin-left: 4px !important;
+            padding: 0 6px !important;
+            font-size: 7px !important;
+          }
+
+          .scale-display strong {
+            font-size: 8px !important;
+          }
+
+          /* Smaller group movement buttons. */
+          .chair-group-controls {
+            right: 7px !important;
+            bottom: 48px !important;
+            gap: 4px !important;
+          }
+
+          .move-all-chairs-button,
+          .move-chairs-individually-button {
+            padding: 5px 7px !important;
+            font-size: 8px !important;
+            border-radius: 6px !important;
+            min-height: 26px !important;
+          }
+
+          .chair-group-button-icon {
+            font-size: 10px !important;
+          }
+
+          /* Center the Venue / Inventory / Matches navigation as requested. */
+          .main-navigation {
+            justify-content: center !important;
+          }
+
+          .main-navigation > * {
+            flex: 0 0 auto;
+          }
+        }
+
+        /* =====================================================
+           FINAL 844 × 390 COMPACT INVENTORY + DELETE CONTROLS
+        ===================================================== */
+        @media (max-width: 950px) and (max-height: 500px) and (orientation: landscape) {
+          /* Keep the inventory area compact and use the panel width efficiently. */
+          .build-panel {
+            width: min(330px, 39vw) !important;
+          }
+
+          .build-panel .panel-content {
+            padding: 7px !important;
+          }
+
+          .build-panel .section-title {
+            margin-bottom: 4px !important;
+          }
+
+          .element-button {
+            padding: 4px 5px !important;
+            min-height: 42px !important;
+          }
+
+          .element-button > span:first-child {
+            width: 30px !important;
+            height: 30px !important;
+            border-radius: 5px !important;
+          }
+
+          .element-button > span:first-child > span {
+            font-size: 13px !important;
+          }
+
+          .element-name {
+            font-size: 9px !important;
+          }
+
+          .element-category,
+          .element-dims,
+          .element-button > span:nth-child(2) > span:last-child {
+            font-size: 7px !important;
+            line-height: 1.15 !important;
+          }
+
+          .add-plus {
+            width: 16px !important;
+            height: 16px !important;
+            font-size: 10px !important;
+          }
+
+          /* The expanded inventory chooser uses a compact horizontal grid. */
+          .bulk-item-panel {
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+            gap: 4px 6px !important;
+            padding: 6px !important;
+            margin-top: 3px !important;
+            margin-bottom: 2px !important;
+            border-radius: 7px !important;
+          }
+
+          .bulk-item-panel > div {
+            min-width: 0 !important;
+          }
+
+          .bulk-item-panel > div:nth-of-type(1) {
+            grid-column: 1 / -1 !important;
+          }
+
+          .bulk-item-panel > div:nth-of-type(1) span {
+            font-size: 8px !important;
+          }
+
+          .bulk-item-panel > div:nth-of-type(2) {
+            grid-column: 1 / -1 !important;
+            gap: 3px !important;
+            flex-wrap: nowrap !important;
+          }
+
+          .bulk-item-panel > div:nth-of-type(2) .preset-btn {
+            flex: 1 1 0 !important;
+            min-width: 0 !important;
+            min-height: 22px !important;
+            padding: 3px 1px !important;
+            font-size: 8px !important;
+          }
+
+          .bulk-item-panel > div:nth-of-type(3) {
+            grid-column: 1 / -1 !important;
+            display: grid !important;
+            grid-template-columns: 24px 42px 24px minmax(70px, 1fr) !important;
+            align-items: center !important;
+            gap: 4px !important;
+            flex-wrap: nowrap !important;
+          }
+
+          .bulk-item-panel > div:nth-of-type(3) button,
+          .bulk-item-panel > div:nth-of-type(3) input[type="number"] {
+            width: 24px !important;
+            height: 24px !important;
+            min-height: 24px !important;
+            padding: 0 !important;
+            font-size: 9px !important;
+          }
+
+          .bulk-item-panel > div:nth-of-type(3) input[type="number"] {
+            width: 42px !important;
+          }
+
+          .bulk-item-panel > div:nth-of-type(3) input[type="range"] {
+            grid-column: 4 !important;
+            grid-row: 1 !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            height: 14px !important;
+          }
+
+          .bulk-item-panel > div:nth-of-type(4) {
+            grid-column: 1 / -1 !important;
+            display: grid !important;
+            grid-template-columns: 58px minmax(0, 1fr) !important;
+            align-items: center !important;
+            gap: 5px !important;
+          }
+
+          .bulk-item-panel > div:nth-of-type(4) > span {
+            font-size: 8px !important;
+          }
+
+          .bulk-item-panel > div:nth-of-type(4) > div {
+            gap: 3px !important;
+          }
+
+          .bulk-item-panel > div:nth-of-type(4) button {
+            min-height: 24px !important;
+            padding: 3px 2px !important;
+            font-size: 7px !important;
+          }
+
+          .bulk-item-panel > div:nth-of-type(5) {
+            grid-column: 1 / -1 !important;
+            margin-top: 0 !important;
+            gap: 5px !important;
+          }
+
+          .bulk-item-panel > div:nth-of-type(5) button {
+            min-height: 26px !important;
+            padding: 4px 6px !important;
+            font-size: 8px !important;
+            border-radius: 6px !important;
+          }
+
+          /* Move the delete controls below the group-selection controls. */
+          .properties-panel:not(.empty-properties) {
+            top: 102px !important;
+            width: 164px !important;
+            padding: 5px !important;
+          }
+
+          .properties-panel:not(.empty-properties) .property-actions {
+            gap: 4px !important;
+          }
+
+          .properties-panel:not(.empty-properties) .delete-button {
+            min-height: 31px !important;
+            padding: 4px 6px !important;
+            font-size: 8px !important;
+            border-radius: 6px !important;
+          }
+
+          /* Show a small visual identity for the exact item being deleted. */
+          .delete-single-item-button {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            gap: 5px !important;
+            text-align: left !important;
+          }
+
+          .delete-item-preview {
+            width: 22px !important;
+            height: 22px !important;
+            flex: 0 0 22px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            overflow: hidden !important;
+            border-radius: 4px !important;
+            background: #f8fafc !important;
+          }
+
+          .delete-item-preview img {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+          }
+
+          .delete-item-preview > span {
+            font-size: 12px !important;
+            line-height: 1 !important;
+          }
+
+          .delete-item-label {
+            min-width: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 1px !important;
+            overflow: hidden !important;
+          }
+
+          .delete-item-action {
+            font-size: 8px !important;
+            font-weight: 800 !important;
+            white-space: nowrap !important;
+          }
+
+          .delete-item-name {
+            font-size: 7px !important;
+            font-weight: 600 !important;
+            opacity: 0.82 !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+          }
+
+          .delete-all-button {
+            min-height: 27px !important;
+          }
+        }
+
+
+        /* =====================================================
+           FINAL MOBILE LANDSCAPE REFINEMENT — 844 × 390
+           Keeps desktop/tablet styling unchanged.
+        ===================================================== */
+        @media (max-width: 950px) and (max-height: 500px) and (orientation: landscape) {
+          /* A narrower inventory panel gives the 3D workspace more room. */
+          .build-panel {
+            width: min(280px, 33vw) !important;
+          }
+
+          .build-panel .panel-content {
+            padding: 8px !important;
+          }
+
+          /* Slightly larger than the previous ultra-compact version, while
+             still fitting efficiently in the narrower inventory column. */
+          .build-panel .section-title {
+            font-size: 11px !important;
+            margin-bottom: 6px !important;
+          }
+
+          .element-button {
+            min-height: 48px !important;
+            padding: 6px 7px !important;
+            gap: 7px !important;
+          }
+
+          .element-button > span:first-child {
+            width: 34px !important;
+            height: 34px !important;
+          }
+
+          .element-button > span:first-child > span {
+            font-size: 15px !important;
+          }
+
+          .element-name {
+            font-size: 10px !important;
+          }
+
+          .element-category,
+          .element-dims,
+          .element-button > span:nth-child(2) > span:last-child {
+            font-size: 8px !important;
+          }
+
+          .add-plus {
+            width: 19px !important;
+            height: 19px !important;
+            font-size: 12px !important;
+          }
+
+          /* Keep every inventory item's chooser compact and readable. */
+          .bulk-item-panel {
+            gap: 5px 6px !important;
+            padding: 7px !important;
+          }
+
+          .bulk-item-panel > div:nth-of-type(2) .preset-btn {
+            min-height: 25px !important;
+            font-size: 9px !important;
+          }
+
+          .bulk-item-panel > div:nth-of-type(3) button,
+          .bulk-item-panel > div:nth-of-type(3) input[type="number"] {
+            height: 26px !important;
+            min-height: 26px !important;
+            font-size: 10px !important;
+          }
+
+          .bulk-item-panel > div:nth-of-type(4) > span {
+            font-size: 9px !important;
+          }
+
+          .bulk-item-panel > div:nth-of-type(4) button {
+            min-height: 26px !important;
+            font-size: 8px !important;
+          }
+
+          .bulk-item-panel > div:nth-of-type(5) button {
+            min-height: 29px !important;
+            font-size: 9px !important;
+          }
+
+          /* Compact selected-item delete controls: icon + requested label only. */
+          .properties-panel:not(.empty-properties) {
+            top: 118px !important;
+            right: 7px !important;
+            width: 138px !important;
+            padding: 5px !important;
+          }
+
+          .properties-panel:not(.empty-properties) .property-actions {
+            gap: 4px !important;
+          }
+
+          .properties-panel:not(.empty-properties) .delete-button {
+            min-height: 30px !important;
+            padding: 5px 7px !important;
+            font-size: 9px !important;
+          }
+
+          .delete-single-item-button,
+          .delete-all-button {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 6px !important;
+            text-align: center !important;
+          }
+
+          .delete-single-item-button .delete-item-preview {
+            width: 19px !important;
+            height: 19px !important;
+            flex: 0 0 19px !important;
+          }
+
+          .delete-single-item-button .delete-item-preview > span {
+            font-size: 11px !important;
+          }
+
+          .delete-item-label,
+          .delete-item-name {
+            display: none !important;
+          }
+
+          .delete-item-action {
+            font-size: 9px !important;
+            font-weight: 800 !important;
+          }
+
+          /* Put the two group movement controls at the bottom edge instead
+             of covering the upper 3D scene. */
+          .chair-group-controls {
+            top: auto !important;
+            bottom: 8px !important;
+            right: 8px !important;
+            gap: 5px !important;
+            z-index: 44 !important;
+          }
+
+          .move-all-chairs-button,
+          .move-chairs-individually-button {
+            min-height: 30px !important;
+            padding: 6px 9px !important;
+            font-size: 9px !important;
+          }
+
+          /* Move the measurement toolbar left so the two movement buttons
+             have their own bottom-right space. */
+          .bottom-toolbar {
+            left: 52% !important;
+            max-width: calc(100% - 180px) !important;
+          }
+        }
+
+        /* =====================================================
+           FINAL MOBILE LANDSCAPE CONTROL POSITION FIX — 844 × 390
+           Keep selection controls at the top and place delete
+           controls at the bottom-right, without changing desktop.
+        ===================================================== */
+        @media (max-width: 950px) and (max-height: 500px) and (orientation: landscape) {
+          /* Restore group selection controls to their original top position. */
+          .chair-group-controls {
+            top: 14px !important;
+            right: 8px !important;
+            bottom: auto !important;
+            z-index: 44 !important;
+          }
+
+          /* Move selected-item delete controls to the former bottom control area. */
+          .properties-panel:not(.empty-properties) {
+            top: auto !important;
+            right: 8px !important;
+            bottom: 8px !important;
+            width: 138px !important;
+            padding: 5px !important;
+            z-index: 46 !important;
+          }
+
+          .properties-panel:not(.empty-properties) .property-actions {
+            margin: 0 !important;
+            gap: 4px !important;
+          }
+
+          /* The measurement toolbar remains clear of the delete controls. */
+          .bottom-toolbar {
+            left: 50% !important;
+            transform: translateX(-50%) !important;
+            max-width: calc(100% - 180px) !important;
+            z-index: 35 !important;
+          }
+        }
+      `}</style>
 
       {themeModalOpen && (
         <div onClick={() => setThemeModalOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", zIndex: 1000 }}>
