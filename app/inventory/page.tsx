@@ -379,56 +379,38 @@ export default function InventoryPage() {
 
       
 
-      <div
-        style={{
-          maxWidth: "1500px",
-          margin: "0 auto",
-          padding: "22px 30px 12px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "16px",
-        }}
-      >
-        <div>
-          <div style={{ fontSize: "11px", fontWeight: 800, letterSpacing: "0.09em", color: "#2563eb", marginBottom: "5px" }}>
-            INVENTORY LIBRARY
-          </div>
-          <h1 style={{ margin: 0, fontSize: "26px", color: "#173b6d" }}>
-            Furniture & Decor
-          </h1>
-          <p style={{ margin: "5px 0 0", color: "#64748b", fontSize: "13px" }}>
-            Manage practical items for your wedding designs.
-          </p>
+      <section className="inventory-page-header">
+        <div className="inventory-page-title">
+          <div className="inventory-eyebrow">INVENTORY LIBRARY</div>
+          <h1>Furniture &amp; Decor</h1>
         </div>
 
-        <button
-          onClick={openAddForm}
-          style={{
-            border: "none",
-            background: "#2563eb",
-            color: "white",
-            padding: "10px 15px",
-            borderRadius: "9px",
-            fontSize: "13px",
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          + Add Item
-        </button>
-      </div>
+        <div className="inventory-page-actions">
+          <div className="inventory-search">
+            <span className="inventory-search-icon" aria-hidden="true">🔍</span>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search inventory..."
+              aria-label="Search inventory"
+            />
+          </div>
 
-      <div
-        style={{
-          display: "flex",
-          maxWidth: "1500px",
-          margin: "0 auto",
-        }}
-      >
+          <button
+            type="button"
+            className="inventory-add-button"
+            onClick={openAddForm}
+          >
+            + Add Item
+          </button>
+        </div>
+      </section>
+
+      <div className="inventory-layout">
         {/* SIDEBAR */}
 
         <aside
+          className="inventory-sidebar"
           style={{
             width: "205px",
             minHeight: "calc(100vh - 72px)",
@@ -438,7 +420,7 @@ export default function InventoryPage() {
             flexShrink: 0,
           }}
         >
-          <div
+          <div className="inventory-categories-title"
             style={{
               fontSize: "12px",
               fontWeight: 700,
@@ -456,6 +438,7 @@ export default function InventoryPage() {
 
             return (
               <button
+                className="inventory-category-button"
                 key={item}
                 onClick={() => setCategory(item)}
                 style={{
@@ -485,88 +468,17 @@ export default function InventoryPage() {
         {/* MAIN */}
 
         <section
+          className="inventory-main"
           style={{
             flex: 1,
             padding: "20px 24px 30px",
             minWidth: 0,
           }}
         >
-          {/* TITLE + SEARCH */}
-
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-end",
-              gap: "20px",
-              marginBottom: "25px",
-            }}
-          >
-            <div>
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: "28px",
-                  fontWeight: 750,
-                  letterSpacing: "-0.02em",
-                }}
-              >
-                Furniture & Decor
-              </h2>
-
-              <p
-                style={{
-                  margin: "7px 0 0",
-                  color: "#7a8395",
-                  fontSize: "14px",
-                }}
-              >
-                Manage the items available for your
-                wedding designs.
-              </p>
-            </div>
-
-            <div
-              style={{
-                position: "relative",
-                width: "280px",
-              }}
-            >
-              <span
-                style={{
-                  position: "absolute",
-                  left: "13px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "#8b93a5",
-                }}
-              >
-                🔍
-              </span>
-
-              <input
-                value={search}
-                onChange={(e) =>
-                  setSearch(e.target.value)
-                }
-                placeholder="Search inventory..."
-                style={{
-                  width: "100%",
-                  boxSizing: "border-box",
-                  padding: "12px 14px 12px 38px",
-                  border: "1px solid #e0e3eb",
-                  borderRadius: "10px",
-                  outline: "none",
-                  background: "white",
-                  fontSize: "14px",
-                  color: "#172033",
-                }}
-              />
-            </div>
-          </div>
+          {/* Inventory title and search are kept in the page header for a compact mobile layout. */}
 
           {!loading && (
-            <div
+            <div className="inventory-count"
               style={{
                 fontSize: "13px",
                 color: "#8a92a3",
@@ -587,7 +499,7 @@ export default function InventoryPage() {
               style={{
                 background: "white",
                 border: "1px solid #e8eaf0",
-                borderRadius: "14px",
+                borderRadius: "10px",
                 padding: "50px",
                 textAlign: "center",
                 color: "#7b8497",
@@ -622,7 +534,7 @@ export default function InventoryPage() {
                 <h3
                   style={{
                     margin: "0 0 7px",
-                    fontSize: "18px",
+                    fontSize: "15px",
                   }}
                 >
                   No inventory items
@@ -645,7 +557,7 @@ export default function InventoryPage() {
 
           {!loading &&
             filteredItems.length > 0 && (
-              <div
+              <div className="inventory-grid"
                 style={{
                   display: "grid",
                   gridTemplateColumns:
@@ -708,7 +620,7 @@ export default function InventoryPage() {
 
                     {/* DETAILS */}
 
-                    <div
+                    <div className="inventory-item-details"
                       style={{
                         padding: "13px",
                       }}
@@ -720,7 +632,7 @@ export default function InventoryPage() {
                           color: "#6668d9",
                           textTransform: "uppercase",
                           letterSpacing: "0.05em",
-                          marginBottom: "6px",
+                          marginBottom: "4px",
                         }}
                       >
                         {item.category}
@@ -795,6 +707,7 @@ export default function InventoryPage() {
       {selectedItem && (
         <div
           onClick={() => setSelectedItem(null)}
+          className="inventory-details-backdrop"
           style={{
             position: "fixed",
             inset: 0,
@@ -805,15 +718,16 @@ export default function InventoryPage() {
           }}
         >
           <div
+            className="inventory-details-panel"
             onClick={(e) => e.stopPropagation()}
             style={{
-              width: "410px",
-              maxWidth: "90vw",
+              width: "350px",
+              maxWidth: "88vw",
               height: "100%",
               background: "white",
               boxShadow:
                 "-10px 0 30px rgba(20, 25, 40, 0.12)",
-              padding: "30px",
+              padding: "18px",
               boxSizing: "border-box",
               overflowY: "auto",
             }}
@@ -823,13 +737,14 @@ export default function InventoryPage() {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                marginBottom: "20px",
+                marginBottom: "12px",
               }}
             >
               <h3
+                className="inventory-details-title"
                 style={{
                   margin: 0,
-                  fontSize: "20px",
+                  fontSize: "16px",
                 }}
               >
                 Item Details
@@ -842,8 +757,8 @@ export default function InventoryPage() {
                 style={{
                   border: "none",
                   background: "#f1f2f6",
-                  width: "34px",
-                  height: "34px",
+                  width: "28px",
+                  height: "28px",
                   borderRadius: "50%",
                   cursor: "pointer",
                   fontSize: "18px",
@@ -856,13 +771,14 @@ export default function InventoryPage() {
             {/* LARGE PREVIEW */}
 
             <div
+              className="inventory-details-preview"
               style={{
-                height: "250px",
+                height: "180px",
                 background:
                   "linear-gradient(145deg, #eef0f6, #fafbfe)",
                 borderRadius: "14px",
                 overflow: "hidden",
-                marginBottom: "22px",
+                marginBottom: "14px",
               }}
             >
               <ModelPreview
@@ -871,6 +787,7 @@ export default function InventoryPage() {
             </div>
 
             <div
+              className="inventory-details-category"
               style={{
                 color: "#6668d9",
                 fontSize: "12px",
@@ -883,9 +800,10 @@ export default function InventoryPage() {
             </div>
 
             <h2
+              className="inventory-details-name"
               style={{
-                margin: "0 0 25px",
-                fontSize: "25px",
+                margin: "0 0 14px",
+                fontSize: "18px",
               }}
             >
               {selectedItem.name}
@@ -894,17 +812,19 @@ export default function InventoryPage() {
             {/* DIMENSIONS */}
 
             <div
+              className="inventory-details-section"
               style={{
                 borderTop:
                   "1px solid #e9ebf0",
-                paddingTop: "20px",
-                marginBottom: "24px",
+                paddingTop: "12px",
+                marginBottom: "14px",
               }}
             >
               <h4
+                className="inventory-details-section-title"
                 style={{
-                  margin: "0 0 14px",
-                  fontSize: "14px",
+                  margin: "0 0 8px",
+                  fontSize: "12px",
                 }}
               >
                 Dimensions
@@ -944,6 +864,7 @@ export default function InventoryPage() {
             {/* INVENTORY */}
 
             <div
+              className="inventory-details-section"
               style={{
                 borderTop:
                   "1px solid #e9ebf0",
@@ -952,6 +873,7 @@ export default function InventoryPage() {
               }}
             >
               <h4
+                className="inventory-details-section-title"
                 style={{
                   margin: "0 0 14px",
                   fontSize: "14px",
@@ -978,14 +900,16 @@ export default function InventoryPage() {
             {/* PRICE */}
 
             <div
+              className="inventory-details-section"
               style={{
                 borderTop:
                   "1px solid #e9ebf0",
-                paddingTop: "20px",
-                marginBottom: "25px",
+                paddingTop: "12px",
+                marginBottom: "14px",
               }}
             >
               <div
+                className="inventory-details-price-label"
                 style={{
                   color: "#7b8497",
                   fontSize: "13px",
@@ -996,8 +920,9 @@ export default function InventoryPage() {
               </div>
 
               <div
+                className="inventory-details-price-value"
                 style={{
-                  fontSize: "25px",
+                  fontSize: "18px",
                   fontWeight: 750,
                 }}
               >
@@ -1010,6 +935,7 @@ export default function InventoryPage() {
             {/* EDIT / DELETE */}
 
             <div
+              className="inventory-details-actions"
               style={{
                 display: "grid",
                 gridTemplateColumns:
@@ -1027,8 +953,9 @@ export default function InventoryPage() {
                     "1px solid #dfe2eb",
                   background: "white",
                   color: "#4f5668",
-                  padding: "13px",
-                  borderRadius: "10px",
+                  padding: "9px",
+                  borderRadius: "8px",
+                  fontSize: "11px",
                   fontWeight: 650,
                   cursor: "pointer",
                 }}
@@ -1061,48 +988,36 @@ export default function InventoryPage() {
             </div>
 
             <button
-  onClick={() => {
-    if (!selectedItem) return;
+              className="inventory-details-add-button"
+              type="button"
+              onClick={() => {
+                if (!selectedItem) {
+                  alert("No inventory item selected.");
+                  return;
+                }
 
-    localStorage.setItem(
-      "design-item",
-      JSON.stringify(selectedItem)
-    );
+                localStorage.setItem(
+                  "design-item",
+                  JSON.stringify(selectedItem)
+                );
 
-    window.location.href = "/";
-  }}
->
-  <button
-  type="button"
-  onClick={() => {
-    if (!selectedItem) {
-      alert("No inventory item selected.");
-      return;
-    }
-
-    localStorage.setItem(
-      "design-item",
-      JSON.stringify(selectedItem)
-    );
-
-    window.location.href = "/";
-  }}
-  style={{
-    width: "100%",
-    border: "none",
-    background:
-      "linear-gradient(135deg, #5b5ce2, #7475ed)",
-    color: "white",
-    padding: "14px",
-    borderRadius: "10px",
-    fontSize: "14px",
-    fontWeight: 700,
-    cursor: "pointer",
-  }}
->
-  Add to Design
-</button>
-</button>
+                window.location.href = "/";
+              }}
+              style={{
+                width: "100%",
+                border: "none",
+                background:
+                  "linear-gradient(135deg, #5b5ce2, #7475ed)",
+                color: "white",
+                padding: "10px",
+                borderRadius: "8px",
+                fontSize: "12px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Add to Design
+            </button>
           </div>
         </div>
       )}
@@ -1111,6 +1026,7 @@ export default function InventoryPage() {
 
       {showForm && (
         <div
+          className="inventory-form-backdrop"
           onClick={closeForm}
           style={{
             position: "fixed",
@@ -1125,6 +1041,7 @@ export default function InventoryPage() {
           }}
         >
           <div
+            className="inventory-form-panel"
             onClick={(e) =>
               e.stopPropagation()
             }
@@ -1142,6 +1059,7 @@ export default function InventoryPage() {
             }}
           >
             <div
+              className="inventory-form-header"
               style={{
                 display: "flex",
                 justifyContent:
@@ -1260,6 +1178,7 @@ export default function InventoryPage() {
             />
 
             <div
+              className="inventory-form-model-note"
               style={{
                 background: "#f7f8fc",
                 borderRadius: "9px",
@@ -1291,6 +1210,7 @@ export default function InventoryPage() {
             </div>
 
             <div
+              className="inventory-form-dimension-grid"
               style={{
                 display: "grid",
                 gridTemplateColumns:
@@ -1334,6 +1254,7 @@ export default function InventoryPage() {
             </div>
 
             <div
+              className="inventory-form-quantity-grid"
               style={{
                 display: "grid",
                 gridTemplateColumns:
@@ -1380,6 +1301,7 @@ export default function InventoryPage() {
             />
 
             <div
+              className="inventory-form-actions"
               style={{
                 display: "grid",
                 gridTemplateColumns:
@@ -1800,7 +1722,597 @@ export default function InventoryPage() {
           }
         }
 
-      `}</style>
+
+
+        /* =====================================================
+           INVENTORY PAGE — FINAL 844 × 390 MOBILE LANDSCAPE
+           Matches the final app/venues/page.tsx visual standard.
+           ===================================================== */
+
+        .inventory-page {
+          box-sizing: border-box;
+        }
+
+        .inventory-page-header {
+          max-width: 1500px;
+          margin: 0 auto;
+          padding: 16px 22px 8px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          box-sizing: border-box;
+        }
+
+        .inventory-page-title {
+          min-width: 0;
+        }
+
+        .inventory-eyebrow {
+          font-size: 9px;
+          font-weight: 800;
+          letter-spacing: .09em;
+          color: #2563eb;
+          margin-bottom: 2px;
+        }
+
+        .inventory-page-title h1 {
+          margin: 0;
+          color: #173b6d;
+          font-size: 20px;
+          line-height: 1;
+          font-weight: 750;
+          letter-spacing: -.02em;
+        }
+
+        .inventory-page-actions {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 8px;
+          flex: 0 0 auto;
+        }
+
+        .inventory-search {
+          position: relative;
+          width: 220px;
+        }
+
+        .inventory-search-icon {
+          position: absolute;
+          left: 10px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #8b93a5;
+          font-size: 11px;
+          pointer-events: none;
+        }
+
+        .inventory-search input {
+          width: 100%;
+          min-height: 34px;
+          box-sizing: border-box;
+          padding: 7px 10px 7px 31px;
+          border: 1px solid #e0e3eb;
+          border-radius: 8px;
+          outline: none;
+          background: white;
+          font-size: 11px;
+          color: #172033;
+        }
+
+        .inventory-add-button {
+          min-height: 34px;
+          border: none;
+          background: #2563eb;
+          color: white;
+          padding: 7px 11px;
+          border-radius: 8px;
+          font-size: 11px;
+          font-weight: 700;
+          cursor: pointer;
+          white-space: nowrap;
+          box-shadow: 0 5px 12px rgba(49,91,182,.14);
+        }
+
+        .inventory-layout {
+          display: flex;
+          width: 100%;
+          max-width: 1500px;
+          margin: 0 auto;
+          box-sizing: border-box;
+        }
+
+        .inventory-sidebar {
+          box-sizing: border-box;
+        }
+
+        .inventory-main {
+          box-sizing: border-box;
+        }
+
+        .inventory-grid {
+          box-sizing: border-box;
+        }
+
+        @media screen and (orientation: landscape) and (min-width: 800px) and (max-width: 900px) and (min-height: 360px) and (max-height: 430px) {
+          .inventory-page {
+            min-height: 100svh !important;
+            background-color: #f7f9fc !important;
+            background-image: radial-gradient(circle, rgba(79, 103, 148, 0.18) 0.7px, transparent 0.95px) !important;
+            background-size: 18px 18px !important;
+            overflow-x: hidden;
+          }
+
+          /* Exact navbar proportions used by the final Venues page. */
+          .planner-navbar {
+            width: calc(100% + 20px) !important;
+            margin-left: -10px !important;
+            margin-bottom: 5px !important;
+          }
+
+          .planner-navbar-inner {
+            min-height: 76px !important;
+            padding: 4px 10px 5px !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            grid-template-rows: 34px 32px !important;
+            gap: 3px !important;
+            align-items: center !important;
+          }
+
+          .planner-brand {
+            height: 34px !important;
+            gap: 8px !important;
+            padding-left: 2px !important;
+          }
+
+          .planner-brand-mark {
+            width: 30px !important;
+            height: 30px !important;
+            border-radius: 8px !important;
+            font-size: 15px !important;
+          }
+
+          .planner-brand-title {
+            font-size: 14px !important;
+            line-height: 1 !important;
+          }
+
+          .planner-brand-subtitle {
+            display: none !important;
+          }
+
+          .planner-navigation {
+            order: 0 !important;
+            width: 100% !important;
+            min-height: 32px !important;
+            height: 32px !important;
+            padding: 2px !important;
+            gap: 1px !important;
+            border-radius: 10px !important;
+            justify-content: center !important;
+            overflow-x: auto !important;
+            overscroll-behavior-x: contain;
+            scrollbar-width: none;
+          }
+
+          .planner-navigation::-webkit-scrollbar {
+            display: none;
+          }
+
+          .planner-nav-link {
+            flex: 0 0 auto;
+            padding: 5px 11px !important;
+            font-size: 10px !important;
+            border-radius: 7px !important;
+          }
+
+          .inventory-page-header {
+            width: 100%;
+            margin: 0;
+            padding: 6px 10px 5px;
+            gap: 8px;
+          }
+
+          .inventory-eyebrow {
+            display: none;
+          }
+
+          .inventory-page-title h1 {
+            font-size: 15px;
+            line-height: 1;
+          }
+
+          .inventory-page-actions {
+            gap: 6px;
+          }
+
+          .inventory-search {
+            width: 165px;
+          }
+
+          .inventory-search input {
+            min-height: 30px;
+            padding: 6px 8px 6px 28px;
+            border-radius: 7px;
+            font-size: 10px;
+          }
+
+          .inventory-search-icon {
+            left: 8px;
+            font-size: 10px;
+          }
+
+          .inventory-add-button {
+            min-height: 30px;
+            padding: 6px 9px;
+            border-radius: 7px;
+            font-size: 10px;
+          }
+
+          .inventory-layout {
+            min-height: calc(100svh - 116px);
+            margin: 0;
+            max-width: none;
+            width: 100%;
+          }
+
+          .inventory-sidebar {
+            width: 120px !important;
+            min-width: 120px !important;
+            min-height: 0 !important;
+            padding: 9px 7px !important;
+          }
+
+          .inventory-categories-title {
+            font-size: 8px !important;
+            letter-spacing: .08em !important;
+            margin-bottom: 5px !important;
+            padding-left: 5px !important;
+          }
+
+          .inventory-category-button {
+            padding: 7px 8px !important;
+            margin-bottom: 2px !important;
+            border-radius: 7px !important;
+            font-size: 10px !important;
+          }
+
+          .inventory-main {
+            padding: 6px 9px 12px !important;
+            min-width: 0 !important;
+          }
+
+          .inventory-count {
+            font-size: 9px !important;
+            margin-bottom: 6px !important;
+          }
+
+          .inventory-grid {
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+            gap: 8px !important;
+          }
+
+          .inventory-item-card {
+            border-radius: 9px !important;
+          }
+
+          .inventory-item-preview {
+            height: 96px !important;
+          }
+
+          .inventory-item-3d-badge {
+            top: 7px !important;
+            right: 7px !important;
+            padding: 3px 6px !important;
+            border-radius: 6px !important;
+            font-size: 8px !important;
+          }
+
+          .inventory-item-details {
+            padding: 8px !important;
+          }
+
+          .inventory-item-details > div:nth-child(1) {
+            font-size: 8px !important;
+            margin-bottom: 3px !important;
+          }
+
+          .inventory-item-details > div:nth-child(2) {
+            font-size: 11px !important;
+            margin-bottom: 5px !important;
+          }
+
+          .inventory-item-details > div:nth-child(3) {
+            font-size: 9px !important;
+            margin-bottom: 6px !important;
+          }
+
+          .inventory-item-details span {
+            font-size: 9px !important;
+          }
+        }
+
+      
+        /* Compact inventory details panel — mobile landscape 844 × 390 */
+        @media screen and (orientation: landscape) and (max-width: 950px) and (max-height: 520px) {
+          .inventory-details-backdrop {
+            align-items: stretch !important;
+          }
+
+          .inventory-details-panel {
+            width: 300px !important;
+            max-width: 42vw !important;
+            padding: 12px !important;
+          }
+
+          .inventory-details-title {
+            font-size: 14px !important;
+          }
+
+          .inventory-details-preview {
+            height: 130px !important;
+            margin-bottom: 10px !important;
+          }
+
+          .inventory-details-name {
+            font-size: 16px !important;
+            margin-bottom: 10px !important;
+          }
+
+          .inventory-details-section {
+            padding-top: 9px !important;
+            margin-bottom: 10px !important;
+          }
+
+          .inventory-details-section-title {
+            font-size: 11px !important;
+            margin-bottom: 6px !important;
+          }
+
+          .inventory-details-actions button {
+            padding: 7px !important;
+            font-size: 10px !important;
+          }
+        }
+
+
+        /* =====================================================
+           ULTRA-COMPACT OVERLAYS — 844 × 390 LANDSCAPE
+           Keeps all functionality while matching the compact
+           sizing standard used across the optimized site.
+           ===================================================== */
+
+        @media screen and (orientation: landscape) and (min-width: 800px) and (max-width: 900px) and (min-height: 360px) and (max-height: 430px) {
+          /* ITEM DETAILS SLIDE PANEL */
+          .inventory-details-panel {
+            width: 238px !important;
+            max-width: 30vw !important;
+            padding: 9px !important;
+          }
+
+          .inventory-details-panel > div:first-child {
+            margin-bottom: 7px !important;
+          }
+
+          .inventory-details-title {
+            font-size: 12px !important;
+            line-height: 1.1 !important;
+          }
+
+          .inventory-details-panel > div:first-child button {
+            width: 22px !important;
+            height: 22px !important;
+            font-size: 15px !important;
+          }
+
+          .inventory-details-preview {
+            height: 86px !important;
+            border-radius: 9px !important;
+            margin-bottom: 7px !important;
+          }
+
+          .inventory-details-name {
+            font-size: 14px !important;
+            line-height: 1.1 !important;
+            margin: 0 0 7px !important;
+          }
+
+          .inventory-details-panel > div:not(.inventory-details-preview) {
+            font-size: 10px;
+          }
+
+          .inventory-details-section {
+            padding-top: 6px !important;
+            margin-bottom: 7px !important;
+          }
+
+          .inventory-details-section-title {
+            font-size: 9px !important;
+            margin-bottom: 4px !important;
+          }
+
+          .inventory-details-panel [style*="gridTemplateColumns"] {
+            gap: 5px !important;
+          }
+
+          .inventory-details-panel [style*="padding: 11px 8px"] {
+            padding: 6px 4px !important;
+            border-radius: 7px !important;
+          }
+
+          .inventory-details-panel [style*="fontSize: 14px"] {
+            font-size: 10px !important;
+          }
+
+          .inventory-details-panel [style*="fontSize: 13px"] {
+            font-size: 10px !important;
+          }
+
+          .inventory-details-panel [style*="fontSize: 12px"] {
+            font-size: 9px !important;
+          }
+
+          .inventory-details-panel [style*="marginBottom: 10px"] {
+            margin-bottom: 6px !important;
+          }
+
+          .inventory-details-actions {
+            gap: 6px !important;
+            margin-top: 8px !important;
+          }
+
+          .inventory-details-actions button {
+            min-height: 28px !important;
+            padding: 6px 7px !important;
+            border-radius: 7px !important;
+            font-size: 9px !important;
+          }
+
+          /* ADD / EDIT ITEM WINDOW */
+          .inventory-form-backdrop {
+            padding: 7px !important;
+            align-items: center !important;
+          }
+
+          .inventory-form-panel {
+            width: 330px !important;
+            max-width: 43vw !important;
+            max-height: calc(100svh - 14px) !important;
+            padding: 12px !important;
+            border-radius: 11px !important;
+          }
+
+          .inventory-form-header {
+            margin-bottom: 9px !important;
+          }
+
+          .inventory-form-header > div > div {
+            font-size: 8px !important;
+            margin-bottom: 2px !important;
+          }
+
+          .inventory-form-header h2 {
+            font-size: 16px !important;
+            line-height: 1.1 !important;
+          }
+
+          .inventory-form-header button {
+            width: 24px !important;
+            height: 24px !important;
+            font-size: 14px !important;
+          }
+
+          .inventory-form-field {
+            margin-bottom: 8px !important;
+          }
+
+          .inventory-form-field > span,
+          .inventory-form-panel label > span {
+            font-size: 10px !important;
+            margin-bottom: 4px !important;
+          }
+
+          .inventory-form-panel input,
+          .inventory-form-panel select {
+            min-height: 30px !important;
+            padding: 6px 8px !important;
+            border-radius: 7px !important;
+            font-size: 10px !important;
+          }
+
+          .inventory-form-panel > label {
+            margin-bottom: 8px !important;
+          }
+
+          .inventory-form-model-note {
+            padding: 6px 8px !important;
+            margin-bottom: 8px !important;
+            border-radius: 7px !important;
+            font-size: 9px !important;
+            line-height: 1.35 !important;
+          }
+
+          .inventory-form-dimension-grid,
+          .inventory-form-quantity-grid {
+            gap: 6px !important;
+            margin-bottom: 8px !important;
+          }
+
+          .inventory-form-dimension-grid + div {
+            font-size: 10px !important;
+            margin-bottom: 5px !important;
+          }
+
+          .inventory-small-field > span {
+            font-size: 8px !important;
+            margin-bottom: 3px !important;
+          }
+
+          .inventory-form-actions {
+            gap: 7px !important;
+            margin-top: 10px !important;
+          }
+
+          .inventory-form-actions button {
+            min-height: 30px !important;
+            padding: 7px !important;
+            border-radius: 7px !important;
+            font-size: 10px !important;
+          }
+
+          /* The explanatory text above the dimensions stays compact. */
+          .inventory-form-panel > div[style*="fontSize: 13px"] {
+            font-size: 10px !important;
+            margin-bottom: 5px !important;
+          }
+        }
+
+
+        @media screen and (orientation: landscape) and (min-width: 800px) and (max-width: 900px) and (min-height: 360px) and (max-height: 430px) {
+          .inventory-details-category {
+            font-size: 8px !important;
+            margin-bottom: 3px !important;
+          }
+
+          .inventory-info-box {
+            padding: 5px 3px !important;
+            border-radius: 6px !important;
+          }
+
+          .inventory-info-box > div:first-child {
+            font-size: 7px !important;
+            margin-bottom: 2px !important;
+          }
+
+          .inventory-info-box > div:last-child {
+            font-size: 9px !important;
+          }
+
+          .inventory-detail-row {
+            margin-bottom: 5px !important;
+            font-size: 10px !important;
+          }
+
+          .inventory-details-price-label {
+            font-size: 9px !important;
+            margin-bottom: 2px !important;
+          }
+
+          .inventory-details-price-value {
+            font-size: 14px !important;
+          }
+
+          .inventory-details-add-button {
+            min-height: 30px !important;
+            padding: 6px 7px !important;
+            border-radius: 7px !important;
+            font-size: 9px !important;
+          }
+        }
+
+        `}</style>
 </main>
   );
 }
@@ -2104,6 +2616,7 @@ function FormField({
 }) {
   return (
     <label
+      className="inventory-form-field"
       style={{
         display: "block",
         marginBottom: "16px",
@@ -2144,7 +2657,7 @@ function SmallField({
   onChange: (value: string) => void;
 }) {
   return (
-    <label>
+    <label className="inventory-small-field">
       <span
         style={{
           display: "block",
@@ -2180,6 +2693,7 @@ function DetailRow({
 }) {
   return (
     <div
+      className="inventory-detail-row"
       style={{
         display: "flex",
         justifyContent: "space-between",
@@ -2206,6 +2720,7 @@ function InfoBox({
 }) {
   return (
     <div
+      className="inventory-info-box"
       style={{
         background: "#f7f8fc",
         borderRadius: "9px",
