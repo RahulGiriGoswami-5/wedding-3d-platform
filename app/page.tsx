@@ -432,8 +432,36 @@ function createModel(
    visible even when there are no furniture items.
 ========================================================= */
 
-function prepareVenueModel(source: THREE.Object3D) {
+function prepareVenueModel(
+  source: THREE.Object3D,
+  theme: {
+    primaryColor: string;
+    secondaryColor: string;
+  }
+) {
   const cloned = source.clone(true);
+
+  /*
+     Venue files can contain missing textures or very dark embedded materials.
+     Rebuild the visible venue materials from the active editor theme so the
+     imported venue always matches the workspace instead of appearing black.
+  */
+  cloned.traverse((object) => {
+    if (!(object instanceof THREE.Mesh)) return;
+
+    const material = new THREE.MeshStandardMaterial({
+      color: theme.secondaryColor,
+      emissive: theme.primaryColor,
+      emissiveIntensity: 0.025,
+      roughness: 0.82,
+      metalness: 0.04,
+      side: THREE.DoubleSide,
+    });
+
+    object.material = material;
+    object.castShadow = true;
+    object.receiveShadow = true;
+  });
 
   cloned.updateMatrixWorld(true);
 
@@ -470,23 +498,110 @@ function prepareVenueModel(source: THREE.Object3D) {
   return cloned;
 }
 
-function VenueGLTFModel({ url }: { url: string }) {
+function getVenuePlacementHeight(model: THREE.Object3D) {
+  /*
+     Furniture positions are stored relative to the editor floor at y = 0.
+     When an imported venue has a physical floor with thickness, its visible
+     top surface can sit above y = 0. Sample that surface so furniture and
+     selection rings sit exactly on the venue instead of being embedded in it.
+  */
+  const samplePoints: [number, number][] = [
+    [0, 0],
+    [-2, 0],
+    [2, 0],
+    [0, -2],
+    [0, 2],
+  ];
+
+  const raycaster = new THREE.Raycaster();
+  const heights: number[] = [];
+
+  model.updateMatrixWorld(true);
+
+  for (const [x, z] of samplePoints) {
+    raycaster.set(
+      new THREE.Vector3(x, 50, z),
+      new THREE.Vector3(0, -1, 0)
+    );
+
+    const hit = raycaster.intersectObject(model, true)[0];
+    if (hit) heights.push(hit.point.y);
+  }
+
+  if (heights.length === 0) return 0;
+
+  heights.sort((a, b) => a - b);
+  return heights[Math.floor(heights.length / 2)];
+}
+
+function VenueGLTFModel({
+  url,
+  primaryColor,
+  secondaryColor,
+  onLoaded,
+}: {
+  url: string;
+  primaryColor: string;
+  secondaryColor: string;
+  onLoaded?: (placementHeight: number) => void;
+}) {
   const { scene } = useGLTF(url);
-  const model = useMemo(() => prepareVenueModel(scene), [scene]);
+  const model = useMemo(
+    () => prepareVenueModel(scene, { primaryColor, secondaryColor }),
+    [scene, primaryColor, secondaryColor]
+  );
+
+  useEffect(() => {
+    onLoaded?.(getVenuePlacementHeight(model));
+  }, [onLoaded, model]);
 
   return <primitive object={model} dispose={null} />;
 }
 
-function VenueFBXModel({ url }: { url: string }) {
+function VenueFBXModel({
+  url,
+  primaryColor,
+  secondaryColor,
+  onLoaded,
+}: {
+  url: string;
+  primaryColor: string;
+  secondaryColor: string;
+  onLoaded?: (placementHeight: number) => void;
+}) {
   const scene = useLoader(FBXLoader, url);
-  const model = useMemo(() => prepareVenueModel(scene), [scene]);
+  const model = useMemo(
+    () => prepareVenueModel(scene, { primaryColor, secondaryColor }),
+    [scene, primaryColor, secondaryColor]
+  );
+
+  useEffect(() => {
+    onLoaded?.(getVenuePlacementHeight(model));
+  }, [onLoaded, model]);
 
   return <primitive object={model} dispose={null} />;
 }
 
-function VenueOBJModel({ url }: { url: string }) {
+function VenueOBJModel({
+  url,
+  primaryColor,
+  secondaryColor,
+  onLoaded,
+}: {
+  url: string;
+  primaryColor: string;
+  secondaryColor: string;
+  onLoaded?: (placementHeight: number) => void;
+}) {
   const scene = useLoader(OBJLoader, url);
-  const model = useMemo(() => prepareVenueModel(scene), [scene]);
+  const model = useMemo(
+    () => prepareVenueModel(scene, { primaryColor, secondaryColor }),
+    [scene, primaryColor, secondaryColor]
+  );
+
+  useEffect(() => {
+    onLoaded?.(getVenuePlacementHeight(model));
+  }, [onLoaded, model]);
 
   return <primitive object={model} dispose={null} />;
 }
@@ -537,7 +652,17 @@ function isSupportedVenueModel(url: string) {
   return ["fbx", "obj", "glb", "gltf"].includes(getModelExtension(url));
 }
 
-function VenueModel({ url }: { url: string }) {
+function VenueModel({
+  url,
+  primaryColor,
+  secondaryColor,
+  onLoaded,
+}: {
+  url: string;
+  primaryColor: string;
+  secondaryColor: string;
+  onLoaded?: (placementHeight: number) => void;
+}) {
   const [status, setStatus] = useState<ModelLoadStatus>("checking");
 
   useEffect(() => {
@@ -571,16 +696,22 @@ function VenueModel({ url }: { url: string }) {
   if (status !== "ready") return null;
 
   const extension = getModelExtension(url);
+  const props = {
+    url,
+    primaryColor,
+    secondaryColor,
+    onLoaded,
+  };
 
   if (extension === "fbx") {
-    return <VenueFBXModel url={url} />;
+    return <VenueFBXModel {...props} />;
   }
 
   if (extension === "obj") {
-    return <VenueOBJModel url={url} />;
+    return <VenueOBJModel {...props} />;
   }
 
-  return <VenueGLTFModel url={url} />;
+  return <VenueGLTFModel {...props} />;
 }
 
 function VenueModelNotice({ url }: { url: string | null }) {
@@ -659,6 +790,7 @@ function Furniture3D({
   onMeasureSelect,
   onMove,
   onStartDrag,
+  placementSurfaceY = 0,
 }: {
   item: FurnitureItem;
   selected: boolean;
@@ -673,6 +805,7 @@ function Furniture3D({
     id: number,
     e: ThreeEvent<PointerEvent>
   ) => void;
+  placementSurfaceY?: number;
 }) {
   /*
      IMPORTANT:
@@ -813,9 +946,29 @@ function Furniture3D({
     }
   };
 
+  /*
+     Keep the inventory model visually seated on the venue, while adding only
+     a tiny clearance so the venue surface cannot hide the selection indicator.
+     0.035m is small enough to avoid a floating appearance.
+  */
+  const surfaceClearance = 0.035;
+
+  /*
+     The old fixed-size ring was hidden underneath larger objects such as sofas
+     and stages. Size the ring from the real inventory footprint so it remains
+     visible around the selected object.
+  */
+  const selectionRadius =
+    Math.max(dimensions.width, dimensions.depth) / 2 + 0.08;
+  const measurementRadius = selectionRadius + 0.10;
+
   return (
     <group
-      position={item.position}
+      position={[
+        item.position[0],
+        placementSurfaceY + surfaceClearance,
+        item.position[2],
+      ]}
       rotation={[
         0,
         item.rotation,
@@ -842,22 +995,26 @@ function Furniture3D({
           ]}
           position={[
             0,
-            0.03,
+            0.09,
             0,
           ]}
+          renderOrder={1000}
         >
           <ringGeometry
             args={[
-              0.45,
-              0.52,
-              32,
+              selectionRadius,
+              selectionRadius + 0.07,
+              64,
             ]}
           />
 
           <meshBasicMaterial
             color="#2563eb"
             transparent
-            opacity={0.9}
+            opacity={1}
+            depthTest={false}
+            depthWrite={false}
+            toneMapped={false}
           />
         </mesh>
       )}
@@ -875,22 +1032,26 @@ function Furniture3D({
           ]}
           position={[
             0,
-            0.05,
+            0.11,
             0,
           ]}
+          renderOrder={1001}
         >
           <ringGeometry
             args={[
-              0.58,
-              0.66,
-              32,
+              measurementRadius,
+              measurementRadius + 0.07,
+              64,
             ]}
           />
 
           <meshBasicMaterial
             color="#ef4444"
             transparent
-            opacity={0.9}
+            opacity={1}
+            depthTest={false}
+            depthWrite={false}
+            toneMapped={false}
           />
         </mesh>
       )}
@@ -2603,6 +2764,13 @@ export default function Home() {
   const [currentDesignId, setCurrentDesignId] = useState<number | null>(null);
   const [currentDesignName, setCurrentDesignName] = useState("");
   const [selectedThemeId, setSelectedThemeId] = useState<number | null>(null);
+  const [venueModelLoaded, setVenueModelLoaded] = useState(false);
+  const [venuePlacementSurfaceY, setVenuePlacementSurfaceY] = useState(0);
+  useEffect(() => {
+    setVenueModelLoaded(false);
+    setVenuePlacementSurfaceY(0);
+  }, [venue?.modelUrl]);
+
   /* =======================================================
      LOAD THEMES
   ======================================================= */
@@ -4052,26 +4220,25 @@ useEffect(() => {
                   FLOOR
               ================================================= */}
 
-              <Floor
-                primaryColor={selectedTheme?.primaryColor || "#2563eb"}
-                secondaryColor={selectedTheme?.secondaryColor || "#f8fafc"}
-                onClear={() => {
-                  if (
-                    !measureMode
-                  ) {
-                    setSelectedId(
-                      null
-                    );
-                  }
-                }}
-              />
+              {!venueModelLoaded && (
+                <Floor
+                  primaryColor={selectedTheme?.primaryColor || "#2563eb"}
+                  secondaryColor={selectedTheme?.secondaryColor || "#f8fafc"}
+                  onClear={() => {
+                    if (!measureMode) {
+                      setSelectedId(null);
+                    }
+                  }}
+                />
+              )}
 
               {/* =================================================
                   UPLOADED VENUE MODEL
 
-                  Keep the venue model inside the Canvas and in 3D
-                  mode only. This was missing from the previous file,
-                  which is why the uploaded venue disappeared.
+                  The uploaded venue replaces the editor's temporary grid platform
+                  after it has loaded successfully. Its visible materials are rebuilt
+                  from the active theme so dark or missing source textures cannot make
+                  the venue appear as a black shape.
               ================================================= */}
 
               {viewMode === "3D" && venue?.modelUrl && (
@@ -4079,6 +4246,12 @@ useEffect(() => {
                   <Suspense fallback={null}>
                     <VenueModel
                       url={venue.modelUrl}
+                      primaryColor={selectedTheme?.primaryColor || "#2563eb"}
+                      secondaryColor={selectedTheme?.secondaryColor || "#f8fafc"}
+                      onLoaded={(placementHeight) => {
+                        setVenuePlacementSurfaceY(placementHeight);
+                        setVenueModelLoaded(true);
+                      }}
                     />
                   </Suspense>
                 </ModelErrorBoundary>
@@ -4099,6 +4272,7 @@ useEffect(() => {
                       item={
                         item
                       }
+                      placementSurfaceY={venueModelLoaded ? venuePlacementSurfaceY : 0}
                       selected={selectedIds.includes(item.id) || selectedId === item.id}
                       measureMode={
                         measureMode
