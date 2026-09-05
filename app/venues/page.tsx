@@ -250,23 +250,24 @@ export default function VenuesPage() {
 
   return (
     <main className="venues-page">
-      <header className="topbar">
-        <a href="/" className="brand" aria-label="Wedding Planner home">
-          <div className="brand-icon">W</div>
-          <div className="brand-copy">
-            <div className="brand-title">Wedding Planner</div>
-            <div className="brand-subtitle">3D Venue Designer</div>
-          </div>
-        </a>
-
-        <nav className="main-navigation" aria-label="Main navigation">
-          <a href="/" className="top-nav-link">Designer</a>
-          <a href="/venues" className="top-nav-link active" aria-current="page">Venues</a>
-          <a href="/inventory" className="top-nav-link">Inventory</a>
-          <a href="/match" className="top-nav-link">Find Matches</a>
-          <a href="/themes" className="top-nav-link">Themes</a>
-          <a href="/designs" className="top-nav-link">Saved Designs</a>
-        </nav>
+      <header className="planner-navbar">
+        <div className="planner-navbar-inner">
+          <a href="/" className="planner-brand" aria-label="Wedding Planner home">
+            <span className="planner-brand-mark">W</span>
+            <span>
+              <span className="planner-brand-title">Wedding Planner</span>
+              <span className="planner-brand-subtitle">3D Venue Designer</span>
+            </span>
+          </a>
+          <nav className="planner-navigation" aria-label="Main navigation">
+            <a href="/" className="planner-nav-link">Designer</a>
+            <a href="/venues" className="planner-nav-link planner-nav-active" aria-current="page">Venues</a>
+            <a href="/inventory" className="planner-nav-link">Inventory</a>
+            <a href="/match" className="planner-nav-link">Find Matches</a>
+            <a href="/themes" className="planner-nav-link">Themes</a>
+            <a href="/designs" className="planner-nav-link">Saved Designs</a>
+          </nav>
+        </div>
       </header>
 
       <section className="venues-header">
@@ -507,115 +508,149 @@ export default function VenuesPage() {
           background-size: 24px 24px;
         }
 
-        .topbar {
-          position: relative;
-          left: 50%;
-          width: 100vw;
+        /* Full-width navigation that remains aligned to the viewport edges. */
+        .planner-navbar {
+          position: sticky;
+          top: 0;
+          z-index: 1000;
+          width: calc(100% + 120px);
           max-width: none;
-          margin: 0 0 36px;
-          padding: 14px 60px;
-          transform: translateX(-50%);
+          margin: 0 0 0 -60px;
+          padding: 0;
           box-sizing: border-box;
-          min-height: 108px;
+          background: rgba(255,255,255,.97);
+          border-bottom: 1px solid #dbe3ef;
+          backdrop-filter: blur(16px);
+          box-shadow: 0 8px 24px rgba(15,23,42,.06);
+        }
+        .planner-navbar-inner {
+          width: 100%;
+          min-height: 92px;
+          margin: 0;
+          padding: 10px 28px;
           display: grid;
-          grid-template-columns: minmax(250px, 1fr) minmax(640px, 900px) 1fr;
+          grid-template-columns: 290px minmax(0, 1fr);
           align-items: center;
-          gap: 28px;
-          background: rgba(255, 255, 255, 0.94);
-          border-bottom: 1px solid #dfe5ee;
-          box-shadow: 0 8px 24px rgba(38, 55, 86, 0.05);
-          backdrop-filter: blur(14px);
+          gap: 18px;
+          box-sizing: border-box;
         }
-
-        .brand {
-          display: inline-flex;
+        .planner-navbar-inner::after {
+          display: none;
+        }
+        .planner-brand {
+          min-width: 0;
+          display: flex;
           align-items: center;
-          gap: 13px;
-          width: fit-content;
+          gap: 12px;
+          color: #243247;
           text-decoration: none;
-          color: inherit;
-          white-space: nowrap;
+          width: max-content;
+          max-width: 100%;
+          overflow: visible;
         }
-
-        .brand-icon {
-          width: 58px;
-          height: 58px;
+        .planner-brand-mark {
+          width: 50px;
+          height: 50px;
+          border-radius: 12px;
           display: grid;
           place-items: center;
-          flex: 0 0 58px;
-          border-radius: 14px;
-          color: #ffffff;
-          background: linear-gradient(135deg, #3f70c9, #294f9d);
-          box-shadow: 0 10px 22px rgba(49, 91, 182, 0.22);
-          font-size: 26px;
-          font-weight: 900;
-        }
-
-        .brand-copy {
-          display: grid;
-          gap: 3px;
-        }
-
-        .brand-title {
-          color: #27364a;
-          font-size: 22px;
-          line-height: 1.1;
+          flex: 0 0 auto;
+          background: linear-gradient(135deg,#2f66c8,#1d4fa8);
+          color: #fff;
+          font-size: 24px;
           font-weight: 800;
-          letter-spacing: 0.01em;
+          box-shadow: 0 8px 18px rgba(37,99,235,.22);
         }
-
-        .brand-subtitle {
-          color: #738097;
+        .planner-brand-title {
+          display: block;
+          font-size: 20px;
+          font-weight: 800;
+          letter-spacing: .02em;
+          line-height: 1.15;
+          white-space: nowrap;
+        }
+        .planner-brand-subtitle {
+          display: block;
+          margin-top: 4px;
+          color: #64748b;
           font-size: 12px;
-          font-weight: 700;
+          font-weight: 600;
+          white-space: nowrap;
         }
-
-        .main-navigation {
+        .planner-navigation {
+          min-width: 0;
+          min-height: 60px;
           width: 100%;
-          min-height: 54px;
+          max-width: none;
+          margin: 0;
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 8px;
-          padding: 7px;
+          gap: 4px;
+          padding: 6px;
           box-sizing: border-box;
-          border: 1px solid #d7deea;
-          border-radius: 18px;
-          background: linear-gradient(180deg, #f8fafc, #eef2f7);
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+          border: 1px solid #d7dee9;
+          border-radius: 16px;
+          background: linear-gradient(180deg, rgba(248,250,252,.96), rgba(241,245,249,.9));
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 4px 12px rgba(15,23,42,.035);
         }
-
-        .top-nav-link {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          min-height: 40px;
-          padding: 0 14px;
-          border-radius: 11px;
-          color: #425066;
+        .planner-nav-link {
+          padding: 10px 14px;
+          border-radius: 10px;
+          color: #3d4a5c;
           text-decoration: none;
-          font-size: 15px;
-          font-weight: 750;
+          font-size: 14px;
+          font-weight: 700;
+          line-height: 1;
           white-space: nowrap;
-          transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+          transition: background .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease;
+        }
+        .planner-nav-link:hover {
+          background: #e8eef8;
+          color: #2453a2;
+          transform: translateY(-1px);
+        }
+        .planner-nav-active {
+          background: linear-gradient(180deg,#dce8f9,#d5e2f5);
+          color: #2453a2;
+          box-shadow: 0 2px 8px rgba(30,64,175,.10), inset 0 1px 0 rgba(255,255,255,.75);
+        }
+        @media (max-width: 1180px) {
+          .planner-navbar-inner {
+            grid-template-columns: 250px minmax(0, 1fr);
+            padding: 12px 22px;
+          }
+          .planner-navbar-inner::after { display: none; }
+          .planner-navigation { width: 100%; }
+          .planner-nav-link { padding: 10px 11px; }
+        }
+        @media (max-width: 900px) {
+          .planner-navbar-inner {
+            display: flex;
+            min-height: auto;
+            flex-wrap: wrap;
+            gap: 10px;
+          }
+          .planner-navigation {
+            order: 2;
+            flex-basis: 100%;
+            justify-content: flex-start;
+            overflow-x: auto;
+            scrollbar-width: none;
+          }
+          .planner-navigation::-webkit-scrollbar { display: none; }
+        }
+        @media (max-width: 620px) {
+          .planner-navbar-inner { padding: 10px 12px; }
+          .planner-brand-mark { width: 42px; height: 42px; font-size: 20px; border-radius: 10px; }
+          .planner-brand-title { font-size: 17px; }
+          .planner-brand-subtitle { font-size: 10px; }
+          .planner-navigation { min-height: 52px; border-radius: 13px; }
+          .planner-nav-link { padding: 9px 11px; font-size: 13px; }
         }
 
-        .top-nav-link:hover {
-          color: #2d58ad;
-          background: #e9effa;
-        }
 
-        .top-nav-link.active {
-          color: #294f9d;
-          background: #dfe8f8;
-          box-shadow: 0 4px 12px rgba(52, 80, 135, 0.12);
-        }
-
-        .topbar::after {
-          content: "";
-          display: none;
-        }
-
+        
         /* Icon-only theme button kept at the extreme right of the browser window. */
         .theme-toggle {
           width: 56px;
@@ -655,7 +690,7 @@ export default function VenuesPage() {
           z-index: 2;
         }
 
-        .venues-header {
+.venues-header {
           display: flex;
           justify-content: space-between;
           gap: 30px;

@@ -918,11 +918,21 @@ export default function DesignsPage() {
 
       <style>{`
         /* Shared Wedding Planner navigation - enhanced */
+        /* Full-bleed navigation: touches the exact left and right edges of the viewport. */
+        /* Full-width navbar without shifting or clipping the brand. */
+        .page {
+          --planner-page-gutter: 60px;
+        }
         .planner-navbar {
           position: sticky;
           top: 0;
           z-index: 1000;
-          width: 100%;
+          width: calc(100% + var(--planner-page-gutter) + var(--planner-page-gutter));
+          max-width: none;
+          left: auto;
+          margin: 0 calc(-1 * var(--planner-page-gutter));
+          padding: 0;
+          box-sizing: border-box;
           background: rgba(255,255,255,.97);
           border-bottom: 1px solid #dbe3ef;
           backdrop-filter: blur(16px);
@@ -930,14 +940,18 @@ export default function DesignsPage() {
         }
         .planner-navbar-inner {
           width: 100%;
+          max-width: none;
           min-height: 92px;
-          margin: 0 auto;
-          padding: 10px 26px;
+          margin: 0;
+          padding: 10px 28px;
           display: grid;
-          grid-template-columns: 260px minmax(0, 1fr) auto;
+          grid-template-columns: max-content minmax(0, 1fr);
           align-items: center;
           gap: 18px;
           box-sizing: border-box;
+        }
+        .planner-navbar-inner::after {
+          display: none;
         }
         .planner-brand {
           min-width: 0;
@@ -980,8 +994,9 @@ export default function DesignsPage() {
         }
         .planner-navigation {
           min-height: 60px;
-          width: min(100%, 980px);
-          margin: 0 auto;
+          width: 100%;
+          max-width: none;
+          margin: 0;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -1014,47 +1029,14 @@ export default function DesignsPage() {
           color: #2453a2;
           box-shadow: 0 2px 8px rgba(30,64,175,.10), inset 0 1px 0 rgba(255,255,255,.75);
         }
-        .planner-theme-toggle {
-          justify-self: end;
-          min-width: 74px;
-          min-height: 52px;
-          padding: 0 14px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          border: 1px solid #cbd5e1;
-          border-radius: 14px;
-          background: #ffffff;
-          color: #334155;
-          font-size: 13px;
-          font-weight: 800;
-          cursor: pointer;
-          box-shadow: 0 4px 12px rgba(15,23,42,.05);
-          transition: transform .18s ease, border-color .18s ease, background .18s ease;
-        }
-        .planner-theme-toggle:hover {
-          transform: translateY(-1px);
-          border-color: #94a3b8;
-          background: #f8fafc;
-        }
-        .planner-theme-toggle span:first-child {
-          font-size: 17px;
-          line-height: 1;
-        }
         @media (max-width: 1180px) {
           .planner-navbar-inner {
-            grid-template-columns: 220px minmax(0, 1fr) auto;
-            padding: 12px 18px;
-            gap: 12px;
+            grid-template-columns: 240px minmax(0, 1fr);
+            padding: 12px 28px;
           }
+          .planner-navbar-inner::after { display: none; }
           .planner-navigation { width: 100%; }
           .planner-nav-link { padding: 10px 11px; }
-          .planner-theme-toggle {
-            min-width: 52px;
-            min-height: 52px;
-            padding: 0 12px;
-          }
         }
         @media (max-width: 900px) {
           .planner-navbar-inner {
@@ -1062,9 +1044,6 @@ export default function DesignsPage() {
             min-height: auto;
             flex-wrap: wrap;
             gap: 10px;
-          }
-          .planner-theme-toggle {
-            margin-left: auto;
           }
           .planner-navigation {
             order: 2;
@@ -1084,230 +1063,6 @@ export default function DesignsPage() {
           .planner-nav-link { padding: 9px 11px; font-size: 13px; }
         }
 
-        .wp-navbar {
-          position: sticky;
-          top: 0;
-          z-index: 1000;
-          width: 100%;
-          background: rgba(255, 255, 255, 0.96);
-          border-bottom: 1px solid #e2e8f0;
-          backdrop-filter: blur(12px);
-          box-shadow: 0 4px 18px rgba(15, 23, 42, 0.05);
-        }
-
-        .wp-nav-inner {
-          max-width: 1500px;
-          min-height: 62px;
-          margin: 0 auto;
-          padding: 0 24px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 16px;
-        }
-
-        .wp-brand {
-          display: inline-flex;
-          align-items: center;
-          gap: 9px;
-          color: #173b6d;
-          font-size: 15px;
-          font-weight: 800;
-          text-decoration: none;
-          white-space: nowrap;
-        }
-
-        .wp-brand-mark {
-          width: 30px;
-          height: 30px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 9px;
-          background: #2563eb;
-          color: #fff;
-          font-size: 14px;
-          box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
-        }
-
-        .wp-nav-links {
-          display: flex;
-          align-items: center;
-          gap: 5px;
-          overflow-x: auto;
-          padding: 8px 0;
-          scrollbar-width: none;
-        }
-
-        .wp-nav-links::-webkit-scrollbar {
-          display: none;
-        }
-
-        .wp-nav-link {
-          flex: 0 0 auto;
-          padding: 8px 11px;
-          border-radius: 8px;
-          color: #64748b;
-          font-size: 12px;
-          font-weight: 700;
-          text-decoration: none;
-          transition: background .2s ease, color .2s ease;
-        }
-
-        .wp-nav-link:hover {
-          background: #eff6ff;
-          color: #2563eb;
-        }
-
-        .wp-nav-link.wp-active {
-          background: #eaf2ff;
-          color: #2563eb;
-        }
-
-        @media (max-width: 900px) {
-          .wp-nav-inner {
-            align-items: flex-start;
-            flex-direction: column;
-            gap: 4px;
-            padding-top: 9px;
-            padding-bottom: 8px;
-          }
-
-          .wp-nav-links {
-            width: 100%;
-          }
-        }
-
-        @media (max-width: 520px) {
-          .wp-nav-inner {
-            padding-left: 14px;
-            padding-right: 14px;
-          }
-
-          .wp-brand {
-            font-size: 14px;
-          }
-        }
-
-
-        * {
-          box-sizing: border-box;
-        }
-
-        .page {
-          min-height: 100vh;
-          padding: 20px;
-          background-color: #f8fafc;
-          background-image:
-            radial-gradient(
-              circle,
-              rgba(100, 116, 139, 0.22) 1.15px,
-              transparent 1.25px
-            ),
-            linear-gradient(
-              180deg,
-              #f8fafc 0%,
-              #eef2f7 100%
-            );
-          background-size: 22px 22px, 100% 100%;
-          color: #172033;
-          font-family:
-            Arial,
-            Helvetica,
-            sans-serif;
-        }
-
-        .header,
-        .hero,
-        .content {
-          max-width: 1400px;
-          margin-left: auto;
-          margin-right: auto;
-        }
-
-        .header {
-          margin-bottom: 32px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 30px;
-        }
-
-        .brand {
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          flex-shrink: 0;
-        }
-
-        .brandMark {
-          width: 48px;
-          height: 48px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 14px;
-          color: white;
-          font-weight: 900;
-          font-size: 22px;
-          background:
-            linear-gradient(
-              135deg,
-              #2563eb,
-              #7c3aed
-            );
-          box-shadow:
-            0 10px 25px
-            rgba(
-              37,
-              99,
-              235,
-              0.25
-            );
-        }
-
-        .eyebrow {
-          margin: 0 0 3px;
-          font-size: 10px;
-          font-weight: 800;
-          letter-spacing: 1.5px;
-          color: #64748b;
-        }
-
-        h1 {
-          margin: 0;
-          font-size: 26px;
-          letter-spacing: -0.7px;
-        }
-
-        .navigation {
-          display: flex;
-          flex-wrap: wrap;
-          justify-content: flex-end;
-          gap: 8px;
-        }
-
-        .navigation a {
-          text-decoration: none;
-          color: #475569;
-          background: white;
-          border:
-            1px solid #e2e8f0;
-          padding:
-            10px 14px;
-          border-radius: 9px;
-          font-size: 14px;
-          font-weight: 700;
-          transition:
-            all 0.2s ease;
-        }
-
-        .navigation a:hover,
-        .navigation .activeNav {
-          color: white;
-          background: #2563eb;
-          border-color: #2563eb;
-        }
 
         .hero {
           margin-bottom: 35px;
@@ -2371,6 +2126,7 @@ export default function DesignsPage() {
 
         @media (max-width: 1100px) {
           .page {
+            --planner-page-gutter: 30px;
             padding-left: 30px;
             padding-right: 30px;
           }
@@ -2382,6 +2138,7 @@ export default function DesignsPage() {
 
         @media (max-width: 720px) {
           .page {
+            --planner-page-gutter: 18px;
             padding: 0 18px 48px;
           }
 
