@@ -220,11 +220,7 @@ export default function MatchPage() {
       
 
       <section className="page-heading">
-        <p className="eyebrow">DEMAND MATCHING</p>
         <h1>Wedding Event Matcher</h1>
-        <p className="subtitle">
-          Turn client requirements into venue and inventory recommendations.
-        </p>
       </section>
 
       <div className="match-layout">
@@ -1555,7 +1551,432 @@ export default function MatchPage() {
           }
         }
 
-      `}</style>
+      
+
+        /* =====================================================
+           844 × 390 MOBILE LANDSCAPE OPTIMIZATION
+           Matches the compact Inventory/Venues design standard.
+        ====================================================== */
+        @media screen and (orientation: landscape) and (min-width: 800px) and (max-width: 900px) and (min-height: 360px) and (max-height: 430px) {
+          .match-page {
+            min-height: 100svh !important;
+            padding-bottom: 10px !important;
+            background-size: 18px 18px !important;
+            background-image: radial-gradient(circle at 1px 1px, rgba(100, 116, 139, 0.11) 0.7px, transparent 0.9px) !important;
+          }
+
+          /* Same compact navbar scale used on the final Inventory page */
+          .planner-navbar {
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 1000 !important;
+          }
+
+          .planner-navbar-inner {
+            min-height: 84px !important;
+            padding: 4px 8px 5px !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            grid-template-rows: 36px 38px !important;
+            gap: 3px !important;
+            align-items: center !important;
+          }
+
+          .planner-brand {
+            height: 36px !important;
+            gap: 7px !important;
+            padding-left: 2px !important;
+          }
+
+          .planner-brand-mark {
+            width: 32px !important;
+            height: 32px !important;
+            border-radius: 9px !important;
+            font-size: 15px !important;
+          }
+
+          .planner-brand-title {
+            font-size: 14px !important;
+            line-height: 1 !important;
+          }
+
+          .planner-brand-subtitle {
+            display: none !important;
+          }
+
+          .planner-navigation {
+            width: 100% !important;
+            min-height: 38px !important;
+            height: 38px !important;
+            padding: 3px !important;
+            gap: 2px !important;
+            border-radius: 12px !important;
+            justify-content: center !important;
+            overflow-x: auto !important;
+            overscroll-behavior-x: contain !important;
+            scrollbar-width: none !important;
+          }
+
+          .planner-navigation::-webkit-scrollbar {
+            display: none !important;
+          }
+
+          .planner-nav-link {
+            flex: 0 0 auto !important;
+            padding: 6px 11px !important;
+            border-radius: 8px !important;
+            font-size: 10.5px !important;
+            line-height: 1 !important;
+          }
+
+          /* Page title matches the compact Furniture & Decor heading scale */
+          .page-heading {
+            padding: 8px 12px 6px !important;
+          }
+
+          .page-heading .eyebrow,
+          .page-heading .subtitle {
+            display: none !important;
+          }
+
+          .page-heading h1 {
+            font-size: 17px !important;
+            line-height: 1.1 !important;
+            font-weight: 700 !important;
+          }
+
+          /* Give the event form more horizontal room */
+          .match-layout {
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 0 10px !important;
+            display: grid !important;
+            grid-template-columns: minmax(420px, 1.12fr) minmax(0, 0.88fr) !important;
+            gap: 10px !important;
+            align-items: start !important;
+          }
+
+          .requirements-card,
+          .result-section,
+          .summary-card,
+          .empty-results,
+          .error-card,
+          .design-action-card {
+            border-radius: 10px !important;
+          }
+
+          .requirements-card {
+            position: sticky !important;
+            top: 98px !important;
+            padding: 10px !important;
+          }
+
+          .section-heading {
+            gap: 7px !important;
+            margin-bottom: 9px !important;
+          }
+
+          .step-number,
+          .small-step {
+            width: 21px !important;
+            height: 21px !important;
+            font-size: 9px !important;
+          }
+
+          .section-heading h2,
+          .result-title h2 {
+            font-size: 13px !important;
+            line-height: 1.05 !important;
+          }
+
+          .section-heading p,
+          .result-title p {
+            margin-top: 2px !important;
+            font-size: 9px !important;
+            line-height: 1.15 !important;
+          }
+
+          /* Use the available width to bring more requirement options upward */
+          .requirements-card form {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            gap: 7px !important;
+          }
+
+          .requirements-card .form-group,
+          .form-group {
+            margin-bottom: 0 !important;
+          }
+
+          .requirements-card .form-group:nth-of-type(3),
+          .requirements-card .form-group:nth-of-type(7) {
+            grid-column: auto !important;
+          }
+
+          .requirements-card .two-column {
+            display: contents !important;
+          }
+
+          .requirements-card .two-column .form-group {
+            grid-column: auto !important;
+            margin-bottom: 0 !important;
+          }
+
+          label {
+            margin-bottom: 3px !important;
+            font-size: 9px !important;
+          }
+
+          input,
+          select {
+            min-height: 29px !important;
+            padding: 5px 7px !important;
+            border-radius: 6px !important;
+            font-size: 10px !important;
+          }
+
+          .match-button {
+            grid-column: 1 / -1 !important;
+            padding: 8px !important;
+            border-radius: 7px !important;
+            font-size: 10px !important;
+          }
+
+          .info-box {
+            margin-top: 8px !important;
+            padding: 8px !important;
+            border-radius: 7px !important;
+          }
+
+          .info-box strong {
+            font-size: 9px !important;
+          }
+
+          .info-box p {
+            margin-top: 3px !important;
+            font-size: 8px !important;
+            line-height: 1.35 !important;
+          }
+
+          .results-area {
+            gap: 9px !important;
+            min-width: 0 !important;
+          }
+
+          /* Smaller ready state so it no longer dominates the workspace */
+          .empty-results,
+          .error-card {
+            min-height: 145px !important;
+            padding: 12px !important;
+          }
+
+          .empty-icon {
+            width: 34px !important;
+            height: 34px !important;
+            border-radius: 9px !important;
+            font-size: 16px !important;
+          }
+
+          .empty-results h2 {
+            margin: 7px 0 3px !important;
+            font-size: 12px !important;
+            line-height: 1.15 !important;
+          }
+
+          .empty-results p,
+          .error-card p {
+            max-width: 380px !important;
+            margin: 0 !important;
+            font-size: 8px !important;
+            line-height: 1.3 !important;
+          }
+
+          .error-card h3 {
+            margin: 0 0 6px !important;
+            font-size: 12px !important;
+          }
+
+          .try-again-button {
+            margin-top: 7px !important;
+            padding: 6px 9px !important;
+            border-radius: 7px !important;
+            font-size: 8px !important;
+          }
+
+          .result-section {
+            padding: 10px !important;
+          }
+
+          .result-title {
+            gap: 7px !important;
+            margin-bottom: 8px !important;
+          }
+
+          .result-count {
+            padding: 4px 6px !important;
+            font-size: 8px !important;
+          }
+
+          .venue-list {
+            gap: 6px !important;
+          }
+
+          .venue-card {
+            padding: 7px !important;
+            gap: 8px !important;
+            border-radius: 8px !important;
+          }
+
+          .venue-image {
+            width: 42px !important;
+            min-width: 42px !important;
+            height: 42px !important;
+            border-radius: 7px !important;
+          }
+
+          .venue-image span {
+            width: 24px !important;
+            height: 24px !important;
+            font-size: 10px !important;
+          }
+
+          .venue-name-row {
+            gap: 5px !important;
+          }
+
+          .venue-name-row h3 {
+            font-size: 11px !important;
+          }
+
+          .score {
+            padding: 2px 4px !important;
+            border-radius: 4px !important;
+            font-size: 7px !important;
+          }
+
+          .venue-location {
+            margin: 3px 0 !important;
+            font-size: 8px !important;
+          }
+
+          .venue-info {
+            gap: 7px !important;
+            font-size: 8px !important;
+          }
+
+          .availability {
+            margin-top: 3px !important;
+            font-size: 8px !important;
+          }
+
+          .select-indicator {
+            font-size: 8px !important;
+          }
+
+          .inventory-grid {
+            grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)) !important;
+            gap: 6px !important;
+          }
+
+          .inventory-card {
+            padding: 8px !important;
+            border-radius: 8px !important;
+          }
+
+          .check-mark {
+            top: 5px !important;
+            right: 5px !important;
+            width: 16px !important;
+            height: 16px !important;
+            font-size: 8px !important;
+          }
+
+          .inventory-icon {
+            width: 32px !important;
+            height: 32px !important;
+            margin-bottom: 5px !important;
+            border-radius: 7px !important;
+            font-size: 13px !important;
+          }
+
+          .inventory-card h3 {
+            font-size: 10px !important;
+          }
+
+          .inventory-card p {
+            min-height: 0 !important;
+            margin: 3px 0 !important;
+            font-size: 8px !important;
+          }
+
+          .inventory-bottom {
+            gap: 2px !important;
+            font-size: 8px !important;
+          }
+
+          .no-result {
+            padding: 12px !important;
+            border-radius: 7px !important;
+            font-size: 9px !important;
+          }
+
+          .design-action-card {
+            padding: 10px !important;
+            gap: 10px !important;
+          }
+
+          .design-action-card .eyebrow {
+            margin-bottom: 3px !important;
+            font-size: 8px !important;
+          }
+
+          .design-action-card h2 {
+            margin-bottom: 3px !important;
+            font-size: 13px !important;
+          }
+
+          .design-action-card > div > p:last-child {
+            font-size: 9px !important;
+          }
+
+          .designer-button {
+            padding: 8px 10px !important;
+            border-radius: 7px !important;
+            font-size: 9px !important;
+          }
+
+          .summary-card {
+            padding: 10px !important;
+            gap: 10px !important;
+          }
+
+          .summary-card h3 {
+            margin-bottom: 3px !important;
+            font-size: 12px !important;
+          }
+
+          .summary-card p {
+            font-size: 9px !important;
+          }
+
+          .summary-stats {
+            gap: 10px !important;
+          }
+
+          .summary-stats strong {
+            font-size: 14px !important;
+          }
+
+          .summary-stats span {
+            font-size: 8px !important;
+          }
+
+          .dark-mode {
+            background-size: 18px 18px !important;
+            background-image: radial-gradient(circle at 1px 1px, rgba(203, 213, 225, 0.16) 0.7px, transparent 0.9px) !important;
+          }
+        }
+
+        `}</style>
     </main>
   );
 }
