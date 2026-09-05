@@ -791,6 +791,7 @@ function Furniture3D({
   onMove,
   onStartDrag,
   placementSurfaceY = 0,
+  readOnly = false,
 }: {
   item: FurnitureItem;
   selected: boolean;
@@ -806,6 +807,7 @@ function Furniture3D({
     e: ThreeEvent<PointerEvent>
   ) => void;
   placementSurfaceY?: number;
+  readOnly?: boolean;
 }) {
   /*
      IMPORTANT:
@@ -854,6 +856,8 @@ function Furniture3D({
   const handlePointerDown = (
     e: ThreeEvent<PointerEvent>
   ) => {
+    if (readOnly) return;
+
     e.stopPropagation();
 
     /*
@@ -880,10 +884,11 @@ function Furniture3D({
     e: ThreeEvent<PointerEvent>
   ) => {
     /*
-       Do not move while measuring.
+       Preview mode is strictly read-only.
     */
 
     if (
+      readOnly ||
       measureMode ||
       !selected
     ) {
@@ -1684,6 +1689,116 @@ function HtmlDistanceLabel({
 }
 
 /* =========================================================
+   READ-ONLY 3D PREVIEW
+========================================================= */
+
+function PreviewOverlay({
+  open,
+  onClose,
+  venue,
+  items,
+  selectedTheme,
+  venuePlacementSurfaceY,
+  venueModelLoaded,
+}: {
+  open: boolean;
+  onClose: () => void;
+  venue: Venue | null;
+  items: FurnitureItem[];
+  selectedTheme: Theme | null;
+  venuePlacementSurfaceY: number;
+  venueModelLoaded: boolean;
+}) {
+  useEffect(() => {
+    if (!open) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const primaryColor = selectedTheme?.primaryColor || "#2563eb";
+  const secondaryColor = selectedTheme?.secondaryColor || "#f8fafc";
+
+  return (
+    <div className="preview-overlay" role="dialog" aria-modal="true" aria-label="Read-only 3D preview">
+      <div className="preview-toolbar">
+        <div>
+          <span className="preview-label">3D PREVIEW</span>
+          <strong>{venue?.name || "Wedding Venue"}</strong>
+        </div>
+        <div className="preview-toolbar-actions">
+          <span className="preview-hint">Drag to orbit • Scroll to zoom • Right-drag to pan</span>
+          <button type="button" className="preview-close-button" onClick={onClose}>
+            ✕ Exit Preview
+          </button>
+        </div>
+      </div>
+
+      <Canvas
+        shadows
+        camera={{ position: [8, 8, 8], fov: 45 }}
+        className="preview-canvas"
+      >
+        {!venueModelLoaded && (
+          <Floor
+            primaryColor={primaryColor}
+            secondaryColor={secondaryColor}
+            onClear={() => {}}
+          />
+        )}
+
+        {venue?.modelUrl && (
+          <ModelErrorBoundary key={`preview-${venue.modelUrl}`}>
+            <Suspense fallback={null}>
+              <VenueModel
+                url={venue.modelUrl}
+                primaryColor={primaryColor}
+                secondaryColor={secondaryColor}
+              />
+            </Suspense>
+          </ModelErrorBoundary>
+        )}
+
+        {items.map((item) => (
+          <Furniture3D
+            key={item.id}
+            item={item}
+            placementSurfaceY={venueModelLoaded ? venuePlacementSurfaceY : 0}
+            selected={false}
+            measureMode={false}
+            measureSelected={false}
+            readOnly
+            onSelect={() => {}}
+            onMeasureSelect={() => {}}
+            onMove={() => {}}
+          />
+        ))}
+
+        <ambientLight intensity={1.2} />
+        <directionalLight position={[5, 8, 5]} intensity={2} castShadow />
+        <directionalLight position={[-5, 5, -5]} intensity={0.5} />
+
+        <OrbitControls
+          makeDefault
+          enableRotate
+          enablePan
+          enableZoom
+          minDistance={3}
+          maxDistance={24}
+          maxPolarAngle={Math.PI / 2.02}
+        />
+      </Canvas>
+    </div>
+  );
+}
+
+/* =========================================================
    TOP BAR
 ========================================================= */
 
@@ -1695,6 +1810,7 @@ function TopBar({
   setViewMode,
   selectedTheme,
   onSwitchTheme,
+  onPreview,
 }: {
   venue: Venue | null;
   saving: boolean;
@@ -1703,6 +1819,7 @@ function TopBar({
   setViewMode: (mode: "2D" | "3D") => void;
   selectedTheme: Theme | null;
   onSwitchTheme: () => void;
+  onPreview: () => void;
 }) {
   const primaryColor = selectedTheme?.primaryColor || "#2563eb";
 
@@ -1753,6 +1870,23 @@ function TopBar({
           <span className="status-dot">●</span>{" "}
           {saving ? "Saving..." : "Ready"}
         </span>
+
+        <button
+          type="button"
+          className="preview-button"
+          onClick={onPreview}
+          aria-label="Open 3D preview"
+          title="Preview design"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="M2.2 12s3.4-6 9.8-6 9.8 6 9.8 6-3.4 6-9.8 6-9.8-6-9.8-6Z" />
+            <circle cx="12" cy="12" r="2.75" />
+          </svg>
+        </button>
 
         <button type="button" className="save-button" onClick={saveScene} disabled={saving}>
           {saving ? "Saving..." : "💾 Save Design"}
@@ -2987,6 +3121,9 @@ useEffect(() => {
       "3D"
     );
 
+  /* Read-only full-scene preview. */
+  const [previewOpen, setPreviewOpen] = useState(false);
+
   /* =======================================================
      LOAD EDITOR
   ======================================================= */
@@ -4103,6 +4240,17 @@ useEffect(() => {
           }
           selectedTheme={selectedTheme}
           onSwitchTheme={() => setThemeModalOpen(true)}
+          onPreview={() => setPreviewOpen(true)}
+        />
+
+        <PreviewOverlay
+          open={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          venue={venue}
+          items={items}
+          selectedTheme={selectedTheme}
+          venuePlacementSurfaceY={venuePlacementSurfaceY}
+          venueModelLoaded={venueModelLoaded}
         />
 
         <div className="editor-body">
@@ -5504,7 +5652,160 @@ useEffect(() => {
             padding: 9px 11px;
           }
         }
-      `}</style>
+
+        /* =====================================================
+           READ-ONLY 3D PREVIEW
+        ===================================================== */
+
+        .preview-button {
+          width: 42px;
+          height: 42px;
+          flex: 0 0 42px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid #cbd5e1;
+          border-radius: 12px;
+          padding: 0;
+          background: #ffffff;
+          color: #2563eb;
+          cursor: pointer;
+          box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+          transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+        }
+
+        .preview-button svg {
+          width: 21px;
+          height: 21px;
+          fill: none;
+          stroke: currentColor;
+          stroke-width: 1.9;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+        }
+
+        .preview-button:hover {
+          background: #eff6ff;
+          border-color: #93c5fd;
+          box-shadow: 0 7px 18px rgba(37, 99, 235, 0.16);
+          transform: translateY(-1px);
+        }
+
+        .preview-button:active {
+          transform: translateY(0) scale(0.96);
+          box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
+        }
+
+        .preview-button:focus-visible {
+          outline: 3px solid rgba(37, 99, 235, 0.28);
+          outline-offset: 2px;
+        }
+
+        .preview-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 1000;
+          display: flex;
+          flex-direction: column;
+          background: #f8fafc;
+          animation: preview-fade-in 0.2s ease-out;
+        }
+
+        @keyframes preview-fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        .preview-toolbar {
+          min-height: 72px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 18px;
+          padding: 12px 22px;
+          background: rgba(255, 255, 255, 0.96);
+          border-bottom: 1px solid #dbe1ea;
+          box-shadow: 0 2px 12px rgba(15, 23, 42, 0.08);
+          z-index: 2;
+          animation: preview-toolbar-in 0.24s ease-out;
+        }
+
+        @keyframes preview-toolbar-in {
+          from { opacity: 0; transform: translateY(-8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .preview-toolbar > div:first-child {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .preview-label {
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: 1px;
+          color: #2563eb;
+        }
+
+        .preview-toolbar strong {
+          font-size: 18px;
+          color: #1f2937;
+        }
+
+        .preview-toolbar-actions {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+        }
+
+        .preview-hint {
+          font-size: 12px;
+          color: #64748b;
+          font-weight: 600;
+        }
+
+        .preview-close-button {
+          border: none;
+          border-radius: 10px;
+          padding: 11px 16px;
+          background: #2563eb;
+          color: #ffffff;
+          font-weight: 800;
+          cursor: pointer;
+          white-space: nowrap;
+          box-shadow: 0 6px 16px rgba(37, 99, 235, 0.22);
+          transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+        }
+
+        .preview-close-button:hover {
+          background: #1d4ed8;
+          box-shadow: 0 8px 20px rgba(37, 99, 235, 0.28);
+          transform: translateY(-1px);
+        }
+
+        .preview-close-button:active {
+          transform: translateY(0) scale(0.98);
+        }
+
+        .preview-canvas {
+          flex: 1;
+          min-height: 0;
+          touch-action: none;
+        }
+
+        @media (max-width: 760px) {
+          .preview-toolbar {
+            padding: 10px 12px;
+          }
+
+          .preview-hint {
+            display: none;
+          }
+        }
+      `}
+
+</style>
 
       {themeModalOpen && (
         <div onClick={() => setThemeModalOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", zIndex: 1000 }}>
