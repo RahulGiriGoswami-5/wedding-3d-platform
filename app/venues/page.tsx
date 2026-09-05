@@ -4,39 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 
-function ThemeToggle() {
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    const savedTheme = window.localStorage.getItem("wedding-planner-theme");
-    const shouldUseDark = savedTheme === "dark";
-
-    setIsDark(shouldUseDark);
-    document.documentElement.dataset.theme = shouldUseDark ? "dark" : "light";
-  }, []);
-
-  function toggleTheme() {
-    const nextIsDark = !isDark;
-    setIsDark(nextIsDark);
-    document.documentElement.dataset.theme = nextIsDark ? "dark" : "light";
-    window.localStorage.setItem(
-      "wedding-planner-theme",
-      nextIsDark ? "dark" : "light"
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      className="theme-toggle"
-      onClick={toggleTheme}
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-    >
-      <span aria-hidden="true">{isDark ? "☀️" : "🌙"}</span>
-    </button>
-  );
-}
 
 type Venue = {
   id: number;
@@ -300,8 +267,6 @@ export default function VenuesPage() {
           <a href="/themes" className="top-nav-link">Themes</a>
           <a href="/designs" className="top-nav-link">Saved Designs</a>
         </nav>
-
-        <ThemeToggle />
       </header>
 
       <section className="venues-header">

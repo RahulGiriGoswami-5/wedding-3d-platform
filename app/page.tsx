@@ -18,31 +18,25 @@ function ThemeToggle() {
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    const savedTheme = window.localStorage.getItem("wedding-planner-theme");
-    const shouldUseDark = savedTheme === "dark";
-
-    setIsDark(shouldUseDark);
-    document.documentElement.dataset.theme = shouldUseDark ? "dark" : "light";
+    setIsDark(window.localStorage.getItem("wedding-planner-theme") === "dark");
   }, []);
 
   function toggleTheme() {
     const nextIsDark = !isDark;
+    const theme = nextIsDark ? "dark" : "light";
     setIsDark(nextIsDark);
-    document.documentElement.dataset.theme = nextIsDark ? "dark" : "light";
-    window.localStorage.setItem(
-      "wedding-planner-theme",
-      nextIsDark ? "dark" : "light"
-    );
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.classList.toggle("dark", nextIsDark);
+    document.documentElement.classList.toggle("dark-mode", nextIsDark);
+    document.documentElement.classList.toggle("page-dark", nextIsDark);
+    window.localStorage.setItem("wedding-planner-theme", theme);
+    window.dispatchEvent(new CustomEvent("wedding-planner-theme-change", { detail: theme }));
   }
 
   return (
-    <button
-      type="button"
-      className="theme-toggle"
-      onClick={toggleTheme}
+    <button type="button" className="theme-toggle" onClick={toggleTheme}
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-    >
+      title={isDark ? "Switch to light mode" : "Switch to dark mode"}>
       <span aria-hidden="true">{isDark ? "☀️" : "🌙"}</span>
     </button>
   );
@@ -103,6 +97,8 @@ type InventoryItem = {
 type FurnitureItem = {
   id: number;
   inventoryId?: number;
+  /** Bulk-created objects share a temporary placement group. */
+  groupId?: number;
 
   type: ElementType;
 
@@ -155,7 +151,7 @@ function createMatchedFurnitureItems(
     return {
       id: baseId + index,
       inventoryId: inventoryItem.id,
-      type: getElementType(inventoryItem.category),
+      type: getInventoryElementType(inventoryItem),
       name: inventoryItem.name,
       modelUrl: inventoryItem.modelUrl,
       imageUrl: inventoryItem.imageUrl,
@@ -293,58 +289,42 @@ const ICONS: Record<
    INVENTORY CATEGORY → ELEMENT TYPE
 ========================================================= */
 
-function getElementType(
-  category: string
-): ElementType {
-  const value =
-    category.toLowerCase();
-
-  if (
-    value.includes("table")
-  ) {
-    return "table";
-  }
-
-  if (
-    value.includes("sofa") ||
-    value.includes("couch")
-  ) {
-    return "sofa";
-  }
-
-  if (
-    value.includes("stage")
-  ) {
-    return "stage";
-  }
-
-  if (
-    value.includes("flower") ||
-    value.includes("decoration")
-  ) {
-    return "flowers";
-  }
-
-  if (
-    value.includes("lamp") ||
-    value.includes("light")
-  ) {
-    return "lamp";
-  }
-
-  if (
-    value.includes("chair") ||
-    value.includes("seat")
-  ) {
-    return "chair";
-  }
-
-  return "chair";
+function getElementType(category: string): ElementType {
+  const value = category.toLowerCase().trim();
+  if (value.includes("sofa") || value.includes("couch")) return "sofa";
+  if (value.includes("table")) return "table";
+  if (value.includes("stage")) return "stage";
+  if (value.includes("flower") || value.includes("decoration")) return "flowers";
+  if (value.includes("lamp") || value.includes("light")) return "lamp";
+  // Only explicit chair categories are chairs. Unknown seating must not become a chair.
+  if (value.includes("chair")) return "chair";
+  return "table";
 }
 
-/* =========================================================
-   GET ITEM DIMENSIONS
-========================================================= */
+function getInventoryElementType(item: InventoryItem): ElementType {
+  /*
+     Inventory categories such as "Seating" are shared by chairs and sofas.
+     Therefore the item name must be checked before the generic category.
+     This keeps the original chair/sofa identity and thumbnail correct.
+  */
+  const name = item.name.toLowerCase().trim();
+  const category = item.category.toLowerCase().trim();
+  const value = `${name} ${category}`;
+
+  if (value.includes("sofa") || value.includes("couch")) return "sofa";
+  if (value.includes("chair")) return "chair";
+  if (value.includes("table")) return "table";
+  if (value.includes("stage")) return "stage";
+  if (value.includes("flower") || value.includes("decoration")) return "flowers";
+  if (value.includes("lamp") || value.includes("light")) return "lamp";
+
+  return getElementType(category);
+}
+
+function isActualChair(item: InventoryItem): boolean {
+  /* A sofa is never a chair, even when both use the Seating category. */
+  return getInventoryElementType(item) === "chair";
+}
 
 function getItemDimensions(
   item: FurnitureItem
@@ -678,15 +658,20 @@ function Furniture3D({
   onSelect,
   onMeasureSelect,
   onMove,
+  onStartDrag,
 }: {
   item: FurnitureItem;
   selected: boolean;
   measureMode: boolean;
   measureSelected: boolean;
-  onSelect: () => void;
+  onSelect: (e: ThreeEvent<PointerEvent>) => void;
   onMeasureSelect: () => void;
   onMove: (
     position: [number, number, number]
+  ) => void;
+  onStartDrag?: (
+    id: number,
+    e: ThreeEvent<PointerEvent>
   ) => void;
 }) {
   /*
@@ -748,7 +733,10 @@ function Furniture3D({
       return;
     }
 
-    onSelect();
+    onSelect(e);
+    if (onStartDrag) {
+      onStartDrag(item.id, e);
+    }
   };
 
   /* =======================================================
@@ -839,9 +827,6 @@ function Furniture3D({
         onPointerDown={
           handlePointerDown
         }
-        onPointerMove={
-          handlePointerMove
-        }
       />
 
       {/* =================================================
@@ -925,15 +910,20 @@ function Furniture2D({
   onSelect,
   onMeasureSelect,
   onMove,
+  onStartDrag,
 }: {
   item: FurnitureItem;
   selected: boolean;
   measureMode: boolean;
   measureSelected: boolean;
-  onSelect: () => void;
+  onSelect: (e: ThreeEvent<PointerEvent>) => void;
   onMeasureSelect: () => void;
   onMove: (
     position: [number, number, number]
+  ) => void;
+  onStartDrag?: (
+    id: number,
+    e: ThreeEvent<PointerEvent>
   ) => void;
 }) {
   const {
@@ -963,7 +953,10 @@ function Furniture2D({
     if (measureMode) {
       onMeasureSelect();
     } else {
-      onSelect();
+      onSelect(e);
+      if (onStartDrag) {
+        onStartDrag(item.id, e);
+      }
     }
   };
 
@@ -1096,9 +1089,6 @@ function Furniture2D({
       <mesh
         onPointerDown={
           handlePointerDown
-        }
-        onPointerMove={
-          handlePointerMove
         }
       >
         {isCircle ? (
@@ -1238,6 +1228,64 @@ function Furniture2D({
       )}
     </group>
   );
+}
+
+/* =========================================================
+   DRAG CONTROLLER (SMOOTH OBJECT DRAGGING)
+========================================================= */
+
+function DragController({
+  isDragging,
+  draggingId,
+  dragOffset,
+  onMove,
+  onDragEnd,
+}: {
+  isDragging: boolean;
+  draggingId: number | null;
+  dragOffset: [number, number];
+  onMove: (id: number, pos: [number, number, number]) => void;
+  onDragEnd: () => void;
+}) {
+  const { camera, gl } = useThree();
+
+  useEffect(() => {
+    if (!isDragging || draggingId === null) return;
+
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const hitPoint = new THREE.Vector3();
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const rect = gl.domElement.getBoundingClientRect();
+      pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(pointer, camera);
+      if (raycaster.ray.intersectPlane(plane, hitPoint)) {
+        const nextX = THREE.MathUtils.clamp(hitPoint.x + dragOffset[0], -5.5, 5.5);
+        const nextZ = THREE.MathUtils.clamp(hitPoint.z + dragOffset[1], -5.5, 5.5);
+        onMove(draggingId, [nextX, 0, nextZ]);
+      }
+    };
+
+    const handlePointerUp = () => {
+      onDragEnd();
+    };
+
+    window.addEventListener("pointermove", handlePointerMove, { passive: true });
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+    };
+  }, [isDragging, draggingId, dragOffset, camera, gl, onMove, onDragEnd]);
+
+  return null;
 }
 
 /* =========================================================
@@ -1508,15 +1556,13 @@ function TopBar({
       </a>
 
       <nav className="main-navigation" aria-label="Main navigation">
-        <a href="/" className="top-nav-link">Designer</a>
+        <a href="/" className="top-nav-link active" aria-current="page">Designer</a>
         <a href="/venues" className="top-nav-link">Venues</a>
         <a href="/inventory" className="top-nav-link">Inventory</a>
         <a href="/match" className="top-nav-link">Find Matches</a>
         <a href="/themes" className="top-nav-link">Themes</a>
         <a href="/designs" className="top-nav-link">Saved Designs</a>
       </nav>
-
-      <ThemeToggle />
 
       <div className="project-title">
         <div className="project-small">PROJECT</div>
@@ -1556,6 +1602,8 @@ function TopBar({
           <button type="button" className={viewMode === "3D" ? "view-active" : ""} onClick={() => setViewMode("3D")}>3D</button>
         </div>
       </div>
+
+      <ThemeToggle />
     </header>
   );
 }
@@ -1702,9 +1750,15 @@ function BuildPanel({
   startMeasurement,
   inventory,
   inventoryLoading,
+  placedItems,
+  onSelectSelectedGroup,
+  onMoveIndividually,
+  selectedGroupCount,
 }: {
   addItem: (
-    item: InventoryItem
+    item: InventoryItem,
+    count?: number,
+    arrangement?: "line" | "rows" | "grid"
   ) => void;
 
   measureMode: boolean;
@@ -1714,7 +1768,15 @@ function BuildPanel({
   inventory: InventoryItem[];
 
   inventoryLoading: boolean;
+  placedItems: FurnitureItem[];
+  onSelectSelectedGroup: () => void;
+  onMoveIndividually: () => void;
+  selectedGroupCount: number;
 }) {
+  const [expandedItemId, setExpandedItemId] = useState<number | null>(null);
+  const [bulkQuantity, setBulkQuantity] = useState<number>(25);
+  const [bulkArrangement, setBulkArrangement] = useState<"line" | "rows" | "grid">("rows");
+
   return (
     <section className="build-panel">
       <div className="panel-heading">
@@ -1783,234 +1845,377 @@ function BuildPanel({
           >
             {inventory.map(
               (item) => {
-                const
-                  unavailable =
-                    item.availableQuantity <=
-                    0;
+                const placedCount = placedItems.filter(
+                  (placed) => placed.inventoryId === item.id
+                ).length;
+                const remainingQuantity = Math.max(
+                  0, item.availableQuantity - placedCount
+                );
+                const unavailable = remainingQuantity <= 0;
+                const isExpanded = expandedItemId === item.id;
 
                 return (
-                  <button
-                    key={
-                      item.id
-                    }
-                    className="element-button"
-                    onClick={() =>
-                      addItem(
-                        item
-                      )
-                    }
-                    disabled={
-                      unavailable
-                    }
-                    style={{
-                      padding:
-                        "8px",
-
-                      cursor:
-                        unavailable
-                          ? "not-allowed"
-                          : "pointer",
-
-                      opacity:
-                        unavailable
-                          ? 0.5
-                          : 1,
-                    }}
-                  >
-                    {/* =====================================
-                        IMAGE
-                    ===================================== */}
-
-                    <span
+                  <div key={item.id} style={{ display: "flex", flexDirection: "column" }}>
+                    <button
+                      type="button"
+                      className="element-button"
+                      onClick={() => {
+                        if (unavailable) return;
+                        setBulkQuantity((current) => Math.max(1, Math.min(current, Math.min(50, remainingQuantity))));
+                        setExpandedItemId((cur) => (cur === item.id ? null : item.id));
+                      }}
+                      disabled={unavailable}
                       style={{
-                        width:
-                          "48px",
-
-                        height:
-                          "48px",
-
-                        borderRadius:
-                          "6px",
-
-                        overflow:
-                          "hidden",
-
-                        background:
-                          "#f1f3f5",
-
-                        display:
-                          "flex",
-
-                        alignItems:
-                          "center",
-
-                        justifyContent:
-                          "center",
-
-                        flexShrink:
-                          0,
+                        padding: "8px",
+                        cursor: unavailable ? "not-allowed" : "pointer",
+                        opacity: unavailable ? 0.5 : 1,
                       }}
                     >
-                      {item.imageUrl ? (
-                        <img
-                          src={
-                            item.imageUrl
-                          }
-                          alt={
-                            item.name
-                          }
-                          style={{
-                            width:
-                              "100%",
+                      {/* =====================================
+                          IMAGE
+                      ===================================== */}
 
-                            height:
-                              "100%",
+                      <span
+                        style={{
+                          width: "48px",
+                          height: "48px",
+                          borderRadius: "6px",
+                          overflow: "hidden",
+                          background: "#f1f3f5",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt={item.name}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                            }}
+                          />
+                        ) : (
+                          <span style={{ fontSize: "20px" }}>
+                            {ICONS[getInventoryElementType(item)]}
+                          </span>
+                        )}
+                      </span>
 
-                            objectFit:
-                              "cover",
-                          }}
-                        />
-                      ) : (
+                      {/* =====================================
+                          INFORMATION
+                      ===================================== */}
+
+                      <span
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "flex-start",
+                          minWidth: 0,
+                          flex: 1,
+                        }}
+                      >
                         <span
+                          className="element-name"
                           style={{
-                            fontSize:
-                              "20px",
+                            fontSize: "12px",
+                            fontWeight: 800,
+                            color: "#374151",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            width: "100%",
                           }}
                         >
-                          {ICONS[
-                            getElementType(
-                              item.category
-                            )
-                          ]}
+                          {item.name}
                         </span>
-                      )}
-                    </span>
+
+                        <span
+                          className="element-category"
+                          style={{
+                            fontSize: "10px",
+                            color: "#8b95a1",
+                            marginTop: "3px",
+                          }}
+                        >
+                          {item.category}
+                        </span>
+
+                        <span
+                          className="element-dims"
+                          style={{
+                            fontSize: "9px",
+                            color: "#9ca3af",
+                            marginTop: "3px",
+                          }}
+                        >
+                          {item.width}m × {item.depth}m × {item.height}m
+                        </span>
+
+                        <span
+                          style={{
+                            fontSize: "9px",
+                            color: unavailable ? "#dc2626" : "#16a34a",
+                            marginTop: "2px",
+                          }}
+                        >
+                          {unavailable
+                            ? "Out of stock"
+                            : `${remainingQuantity} available`}
+                        </span>
+                      </span>
+
+                      {/* =====================================
+                          ADD ICON / INDICATOR
+                      ===================================== */}
+
+                      <span className="add-plus">
+                        {isExpanded ? "▲" : "+"}
+                      </span>
+                    </button>
 
                     {/* =====================================
-                        INFORMATION
+                        EXPANDABLE QUANTITY SELECTOR (1–50)
                     ===================================== */}
-
-                    <span
-                      style={{
-                        display:
-                          "flex",
-
-                        flexDirection:
-                          "column",
-
-                        alignItems:
-                          "flex-start",
-
-                        minWidth:
-                          0,
-
-                        flex: 1,
-                      }}
-                    >
-                      <span
+                    {isExpanded && (
+                      <div
+                        className="bulk-item-panel"
                         style={{
-                          fontSize:
-                            "12px",
-
-                          fontWeight:
-                            800,
-
-                          color:
-                            "#374151",
-
-                          overflow:
-                            "hidden",
-
-                          textOverflow:
-                            "ellipsis",
-
-                          whiteSpace:
-                            "nowrap",
-
-                          width:
-                            "100%",
+                          marginTop: "6px",
+                          marginBottom: "4px",
+                          padding: "12px",
+                          background: "#f8fafc",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "10px",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "10px",
                         }}
                       >
-                        {
-                          item.name
-                        }
-                      </span>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                        >
+                          <span style={{ fontSize: "12px", fontWeight: 700 }}>
+                            Select Quantity:
+                          </span>
+                          <span style={{ fontSize: "11px", color: "#64748b" }}>
+                            (up to available stock)
+                          </span>
+                        </div>
 
-                      <span
-                        style={{
-                          fontSize:
-                            "10px",
+                        {/* Quick Presets */}
+                        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                          {[1, 5, 10, 20, 25, 50]
+                            .filter((qty) => qty <= Math.min(50, remainingQuantity))
+                            .map((qty) => (
+                            <button
+                              key={qty}
+                              type="button"
+                              className={`preset-btn ${
+                                bulkQuantity === qty ? "active" : ""
+                              }`}
+                              onClick={() => setBulkQuantity(Math.min(qty, remainingQuantity))}
+                              style={{
+                                flex: "1 0 28px",
+                                padding: "5px 4px",
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                borderRadius: "6px",
+                                border:
+                                  bulkQuantity === qty
+                                    ? "1px solid #2563eb"
+                                    : "1px solid #cbd5e1",
+                                background:
+                                  bulkQuantity === qty ? "#2563eb" : "#ffffff",
+                                color:
+                                  bulkQuantity === qty ? "#ffffff" : "#334155",
+                                cursor: "pointer",
+                              }}
+                            >
+                              {qty}
+                            </button>
+                          ))}
+                        </div>
 
-                          color:
-                            "#8b95a1",
+                        {/* Stepper + Input + Slider */}
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            flexWrap: "wrap",
+                            width: "100%",
+                            minWidth: 0,
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setBulkQuantity((prev) => Math.max(1, prev - 1))
+                            }
+                            style={{
+                              width: "30px",
+                              height: "30px",
+                              borderRadius: "6px",
+                              border: "1px solid #cbd5e1",
+                              background: "#ffffff",
+                              fontWeight: 800,
+                              cursor: "pointer",
+                            }}
+                            aria-label="Decrease quantity"
+                          >
+                            −
+                          </button>
 
-                          marginTop:
-                            "3px",
-                        }}
-                      >
-                        {
-                          item.category
-                        }
-                      </span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={Math.min(50, remainingQuantity)}
+                            value={bulkQuantity}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10);
+                              if (isNaN(val)) setBulkQuantity(1);
+                              else setBulkQuantity(Math.min(Math.min(50, remainingQuantity), Math.max(1, val)));
+                            }}
+                            style={{
+                              width: "55px",
+                              height: "30px",
+                              textAlign: "center",
+                              fontWeight: 800,
+                              fontSize: "13px",
+                              borderRadius: "6px",
+                              border: "1px solid #cbd5e1",
+                            }}
+                          />
 
-                      <span
-                        style={{
-                          fontSize:
-                            "9px",
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setBulkQuantity((prev) => Math.min(Math.min(50, remainingQuantity), prev + 1))
+                            }
+                            style={{
+                              width: "30px",
+                              height: "30px",
+                              borderRadius: "6px",
+                              border: "1px solid #cbd5e1",
+                              background: "#ffffff",
+                              fontWeight: 800,
+                              cursor: "pointer",
+                            }}
+                            aria-label="Increase quantity"
+                          >
+                            +
+                          </button>
 
-                          color:
-                            "#9ca3af",
+                          <input
+                            type="range"
+                            min={1}
+                            max={Math.min(50, remainingQuantity)}
+                            value={bulkQuantity}
+                            onChange={(e) =>
+                              setBulkQuantity(Number(e.target.value))
+                            }
+                            style={{
+                              flex: "1 1 100%",
+                              width: "100%",
+                              minWidth: 0,
+                              maxWidth: "100%",
+                              boxSizing: "border-box",
+                              accentColor: "#2563eb",
+                              cursor: "pointer",
+                            }}
+                          />
+                        </div>
 
-                          marginTop:
-                            "3px",
-                        }}
-                      >
-                        {
-                          item.width
-                        }
-                        m ×{" "}
-                        {
-                          item.depth
-                        }
-                        m ×{" "}
-                        {
-                          item.height
-                        }
-                        m
-                      </span>
+                        {/* Arrangement */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          <span style={{ fontSize: "12px", fontWeight: 700 }}>Arrangement:</span>
+                          <div style={{ display: "flex", gap: "6px" }}>
+                            {([ ["line", "Single Line"], ["rows", "Multiple Rows"], ["grid", "Square / Grid"] ] as const).map(([value, label]) => (
+                              <button key={value} type="button" onClick={() => setBulkArrangement(value)} style={{ flex: 1, padding: "7px 4px", fontSize: "10px", fontWeight: 700, borderRadius: "6px", border: bulkArrangement === value ? "1px solid #2563eb" : "1px solid #cbd5e1", background: bulkArrangement === value ? "#2563eb" : "#fff", color: bulkArrangement === value ? "#fff" : "#334155", cursor: "pointer" }}>{label}</button>
+                            ))}
+                          </div>
+                        </div>
 
-                      <span
-                        style={{
-                          fontSize:
-                            "9px",
-
-                          color:
-                            unavailable
-                              ? "#dc2626"
-                              : "#16a34a",
-
-                          marginTop:
-                            "2px",
-                        }}
-                      >
-                        {unavailable
-                          ? "Out of stock"
-                          : `${item.availableQuantity} available`}
-                      </span>
-                    </span>
-
-                    {/* =====================================
-                        ADD ICON
-                    ===================================== */}
-
-                    <span className="add-plus">
-                      +
-                    </span>
-                  </button>
+                        {/* Confirm & Cancel */}
+                        <div style={{ display: "flex", gap: "8px", marginTop: "2px" }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              addItem(item, Math.min(bulkQuantity, remainingQuantity), bulkArrangement);
+                              setExpandedItemId(null);
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: "8px 10px",
+                              background: "#2563eb",
+                              color: "#ffffff",
+                              border: "none",
+                              borderRadius: "8px",
+                              fontWeight: 800,
+                              fontSize: "12px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Add {Math.min(bulkQuantity, remainingQuantity)} {item.name}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setExpandedItemId(null)}
+                            style={{
+                              padding: "8px 10px",
+                              background: "transparent",
+                              color: "#64748b",
+                              border: "1px solid #cbd5e1",
+                              borderRadius: "8px",
+                              fontWeight: 600,
+                              fontSize: "12px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 );
               }
             )}
           </div>
+        )}
+
+        {/* =================================================
+            GROUP MOVEMENT
+        ================================================= */}
+
+        {placedItems.length > 0 && (
+          <>
+            <div className="section-title second">Group Movement</div>
+
+            <button type="button" className="tool-button" onClick={onSelectSelectedGroup}>
+              <span>↔️</span>
+              <span>Move Selected Group Together</span>
+            </button>
+
+            <button type="button" className="tool-button" onClick={onMoveIndividually} style={{ marginTop: "8px" }}>
+              <span>☝️</span>
+              <span>Move Individually</span>
+            </button>
+
+            <div style={{ marginTop: "8px", fontSize: "11px", color: "#64748b", lineHeight: 1.5 }}>
+              {selectedGroupCount > 1
+                ? `${selectedGroupCount} selected objects move together while keeping their formation.`
+                : "Select an object, then choose Move Selected Group Together to select its own placement group."}
+            </div>
+          </>
         )}
 
         {/* =================================================
@@ -2093,12 +2298,16 @@ function BuildPanel({
 function PropertiesPanel({
   selected,
   deleteSelected,
+  deleteAllSelected,
+  selectedCount,
   rotateSelected,
 }: {
   selected:
     | FurnitureItem
     | undefined;
   deleteSelected: () => void;
+  deleteAllSelected: () => void;
+  selectedCount: number;
   rotateSelected: () => void;
 }) {
   if (!selected) {
@@ -2236,14 +2445,15 @@ function PropertiesPanel({
           ↻ Rotate
         </button>
 
-        <button
-          className="delete-button"
-          onClick={
-            deleteSelected
-          }
-        >
-          🗑 Delete
+        <button className="delete-button" onClick={deleteSelected}>
+          🗑 Delete This Item
         </button>
+
+        {selectedCount > 1 && (
+          <button className="delete-button delete-all-button" onClick={deleteAllSelected}>
+            🗑 Delete All Selected ({selectedCount})
+          </button>
+        )}
       </div>
     </aside>
   );
@@ -2492,13 +2702,67 @@ useEffect(() => {
       []
     );
 
-  const [
-    selectedId,
-    setSelectedId,
-  ] =
-    useState<number | null>(
-      null
-    );
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+
+  /* =======================================================
+     DRAGGING STATE
+  ======================================================= */
+
+  const [isDragging, setIsDragging] = useState(false);
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [dragOffset, setDragOffset] = useState<[number, number]>([0, 0]);
+  const [dragGroupIds, setDragGroupIds] = useState<number[]>([]);
+  const [dragGroupStartPositions, setDragGroupStartPositions] = useState<Record<number, [number, number, number]>>({});
+  const [dragStartPosition, setDragStartPosition] = useState<[number, number, number] | null>(null);
+
+  function handleStartDrag(id: number, e: ThreeEvent<PointerEvent>) {
+    if (measureMode) return;
+
+    const targetItem = items.find((it) => it.id === id);
+    if (!targetItem) return;
+
+    /* Move only the current selection. If this item is not part of the
+       current selection, start a new one-item selection. This prevents a
+       previously selected bulk group from moving when a different group is selected. */
+    const group =
+      selectedIds.includes(id) && selectedIds.length > 1
+        ? selectedIds
+        : [id];
+
+    const starts: Record<number, [number, number, number]> = {};
+
+    items.forEach((item) => {
+      if (group.includes(item.id)) {
+        starts[item.id] = [...item.position] as [number, number, number];
+      }
+    });
+
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const point = new THREE.Vector3();
+
+    if (e.ray) {
+      e.ray.intersectPlane(plane, point);
+    }
+
+    setDragOffset([
+      targetItem.position[0] - point.x,
+      targetItem.position[2] - point.z,
+    ]);
+
+    setDraggingId(id);
+    setDragGroupIds(group);
+    setDragGroupStartPositions(starts);
+    setDragStartPosition([...targetItem.position]);
+    setIsDragging(true);
+  }
+
+  function handleEndDrag() {
+    setIsDragging(false);
+    setDraggingId(null);
+    setDragGroupIds([]);
+    setDragStartPosition(null);
+  }
 
   /* =======================================================
      SAVE
@@ -3029,20 +3293,18 @@ useEffect(() => {
 
       /* DELETE */
 
-      if (
-        e.key === "Delete" ||
-        e.key ===
-          "Backspace"
-      ) {
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
         deleteSelected();
+        return;
       }
 
       /* MOVEMENT */
 
       const amount =
         e.shiftKey
-          ? 0.1
-          : 0.05;
+          ? 0.5
+          : 0.2;
 
       let dx = 0;
       let dz = 0;
@@ -3081,37 +3343,25 @@ useEffect(() => {
       ) {
         e.preventDefault();
 
-        setItems(
-          current =>
-            current.map(
-              item =>
-                item.id ===
-                selectedId
-                  ? {
-                      ...item,
+        const movementIds =
+          selectedIds.length > 1
+            ? selectedIds
+            : [selectedId];
 
-                      position:
-                        [
-                          THREE.MathUtils.clamp(
-                            item.position[0] +
-                              dx,
-                            -5.5,
-                            5.5
-                          ),
-
-                          0,
-
-                          THREE.MathUtils.clamp(
-                            item.position[2] +
-                              dz,
-                            -5.5,
-                            5.5
-                          ),
-                        ],
-                    }
-                  : item
-            )
-        );
+        setItems((current) => {
+          const moving = current.filter((item) => movementIds.includes(item.id));
+          if (moving.length === 0) return current;
+          const minX = Math.min(...moving.map((item) => item.position[0]));
+          const maxX = Math.max(...moving.map((item) => item.position[0]));
+          const minZ = Math.min(...moving.map((item) => item.position[2]));
+          const maxZ = Math.max(...moving.map((item) => item.position[2]));
+          const safeDx = THREE.MathUtils.clamp(dx, -5.5 - minX, 5.5 - maxX);
+          const safeDz = THREE.MathUtils.clamp(dz, -5.5 - minZ, 5.5 - maxZ);
+          return current.map((item) => movementIds.includes(item.id)
+            ? { ...item, position: [item.position[0] + safeDx, 0, item.position[2] + safeDz] }
+            : item
+          );
+        });
       }
     }
 
@@ -3132,7 +3382,9 @@ useEffect(() => {
   ======================================================= */
 
   function addItem(
-    inventoryItem: InventoryItem
+    inventoryItem: InventoryItem,
+    count: number = 1,
+    arrangement: "line" | "rows" | "grid" = "rows"
   ) {
     /*
        Do not allow an item with
@@ -3150,68 +3402,111 @@ useEffect(() => {
       return;
     }
 
-    const id =
-      Date.now();
-
-    /*
-       Convert the inventory category
-       into one of our supported
-       visual types.
-
-       The actual model comes from
-       inventoryItem.modelUrl.
-    */
-
     const type =
-      getElementType(
-        inventoryItem.category
+      getInventoryElementType(
+        inventoryItem
       );
 
-    const item: FurnitureItem = {
-      id,
-
-      inventoryId:
-        inventoryItem.id,
-
-      type,
-
-      name:
-        inventoryItem.name,
-
-      modelUrl:
-        inventoryItem.modelUrl,
-
-      imageUrl:
-        inventoryItem.imageUrl,
-
-      width:
-        inventoryItem.width,
-
-      depth:
-        inventoryItem.depth,
-
-      height:
-        inventoryItem.height,
-
-      position: [
-        0,
-        0,
-        0,
-      ],
-
-      rotation: 0,
-    };
-
-    setItems(
-      current => [
-        ...current,
-        item,
-      ]
+    const alreadyPlaced = items.filter(
+      (placed) => placed.inventoryId === inventoryItem.id
+    ).length;
+    const remainingQuantity = Math.max(
+      0, inventoryItem.availableQuantity - alreadyPlaced
     );
+    const validCount = Math.max(1, Math.min(50, count, remainingQuantity));
 
-    setSelectedId(
-      id
-    );
+    if (remainingQuantity <= 0) {
+      alert("No more units of this item are available.");
+      return;
+    }
+
+    if (validCount === 1) {
+      const id =
+        Date.now();
+
+      const item: FurnitureItem = {
+        id,
+        inventoryId:
+          inventoryItem.id,
+        groupId: id,
+        type,
+        name:
+          inventoryItem.name,
+        modelUrl:
+          inventoryItem.modelUrl,
+        imageUrl:
+          inventoryItem.imageUrl,
+        width:
+          inventoryItem.width,
+        depth:
+          inventoryItem.depth,
+        height:
+          inventoryItem.height,
+        position: [
+          0,
+          0,
+          0,
+        ],
+        rotation: 0,
+      };
+
+      setItems(
+        current => [
+          ...current,
+          item,
+        ]
+      );
+
+      setSelectedId(
+        id
+      );
+      return;
+    }
+
+    /* BULK ADDING: exact independent objects, real dimensions and safe spacing for every inventory item. */
+    const colSpacing = Math.max((inventoryItem.width || 0.5) + 0.18, 0.65);
+    const rowSpacing = Math.max((inventoryItem.depth || 0.5) + 0.4, 0.9);
+    let cols: number;
+    if (arrangement === "line") cols = validCount;
+    else if (arrangement === "grid") cols = Math.ceil(Math.sqrt(validCount));
+    else cols = Math.min(validCount, Math.max(2, Math.ceil(Math.sqrt(validCount * 1.5))));
+    const rows = Math.ceil(validCount / cols);
+    const newItems: FurnitureItem[] = [];
+    const baseId = Date.now();
+    const placementGroupId = baseId;
+
+    for (let i = 0; i < validCount; i++) {
+      const row = Math.floor(i / cols);
+      const col = i % cols;
+      const itemsInThisRow =
+        row === rows - 1 && validCount % cols !== 0 ? validCount % cols : cols;
+
+      const posX = (col - (itemsInThisRow - 1) / 2) * colSpacing;
+      const posZ = (row - (rows - 1) / 2) * rowSpacing;
+
+      newItems.push({
+        id: baseId + i,
+        inventoryId: inventoryItem.id,
+        groupId: placementGroupId,
+        type,
+        name: `${inventoryItem.name} #${i + 1}`,
+        modelUrl: inventoryItem.modelUrl,
+        imageUrl: inventoryItem.imageUrl,
+        width: inventoryItem.width,
+        depth: inventoryItem.depth,
+        height: inventoryItem.height,
+        position: [
+          THREE.MathUtils.clamp(posX, -5.5, 5.5),
+          0,
+          THREE.MathUtils.clamp(posZ, -5.5, 5.5),
+        ],
+        rotation: 0,
+      });
+    }
+
+    setItems(current => [...current, ...newItems]);
+    setSelectedIds(newItems.map((item) => item.id));
+    setSelectedId(newItems[0].id);
   }
 
   /* =======================================================
@@ -3268,26 +3563,36 @@ useEffect(() => {
      MOVE ELEMENT
   ======================================================= */
 
-  function moveItem(
-    id: number,
-    position: [
-      number,
-      number,
-      number
-    ]
-  ) {
-    setItems(
-      current =>
-        current.map(
-          item =>
-            item.id === id
-              ? {
-                  ...item,
-                  position,
-                }
-              : item
-        )
-    );
+  function moveItem(id: number, position: [number, number, number]) {
+    if (dragGroupIds.length > 1 && dragGroupIds.includes(id) && dragStartPosition) {
+      let dx = position[0] - dragStartPosition[0];
+      let dz = position[2] - dragStartPosition[2];
+
+      // Clamp the group's translation once, rather than clamping each chair
+      // separately. This keeps every selected chair at the same relative
+      // position while the complete group remains inside the venue.
+      const startPositions = dragGroupIds
+        .map((itemId) => dragGroupStartPositions[itemId])
+        .filter((start): start is [number, number, number] => Boolean(start));
+
+      if (startPositions.length > 0) {
+        const minX = Math.min(...startPositions.map((start) => start[0]));
+        const maxX = Math.max(...startPositions.map((start) => start[0]));
+        const minZ = Math.min(...startPositions.map((start) => start[2]));
+        const maxZ = Math.max(...startPositions.map((start) => start[2]));
+
+        dx = THREE.MathUtils.clamp(dx, -5.5 - minX, 5.5 - maxX);
+        dz = THREE.MathUtils.clamp(dz, -5.5 - minZ, 5.5 - maxZ);
+      }
+
+      setItems(current => current.map(item => {
+        if (!dragGroupIds.includes(item.id)) return item;
+        const start = dragGroupStartPositions[item.id] || item.position;
+        return { ...item, position: [start[0] + dx, 0, start[2] + dz] };
+      }));
+      return;
+    }
+    setItems(current => current.map(item => item.id === id ? { ...item, position } : item));
   }
 
   /* =======================================================
@@ -3325,24 +3630,21 @@ useEffect(() => {
   ======================================================= */
 
   function deleteSelected() {
-    if (
-      selectedId === null
-    ) {
-      return;
-    }
+    if (selectedId === null) return;
+    const idToDelete = selectedId;
+    setItems((current) => current.filter((item) => item.id !== idToDelete));
+    setSelectedIds((current) => current.filter((id) => id !== idToDelete));
+    setSelectedId(null);
+  }
 
-    setItems(
-      current =>
-        current.filter(
-          item =>
-            item.id !==
-            selectedId
-        )
-    );
-
-    setSelectedId(
-      null
-    );
+  function deleteAllSelected() {
+    const idsToDelete = selectedIds.length > 0
+      ? selectedIds
+      : selectedId === null ? [] : [selectedId];
+    if (idsToDelete.length === 0) return;
+    setItems((current) => current.filter((item) => !idsToDelete.includes(item.id)));
+    setSelectedIds([]);
+    setSelectedId(null);
   }
 
   /* =======================================================
@@ -3417,6 +3719,21 @@ useEffect(() => {
     setMeasureMode(
       false
     );
+  }
+
+  function selectSelectedGroup() {
+    if (selectedId === null) return;
+    const selectedItem = items.find((item) => item.id === selectedId);
+    if (!selectedItem) return;
+    const groupIds = selectedItem.groupId !== undefined
+      ? items.filter((item) => item.groupId === selectedItem.groupId).map((item) => item.id)
+      : [selectedItem.id];
+    setSelectedIds(groupIds);
+  }
+
+  function moveIndividually() {
+    if (selectedId !== null) setSelectedIds([selectedId]);
+    else setSelectedIds([]);
   }
 
   /* =======================================================
@@ -3646,6 +3963,10 @@ useEffect(() => {
               startMeasurement={startMeasurement}
               inventory={inventory}
               inventoryLoading={inventoryLoading}
+              placedItems={items}
+              onSelectSelectedGroup={selectSelectedGroup}
+              onMoveIndividually={moveIndividually}
+              selectedGroupCount={selectedIds.length}
             />
           ) : (
             <NavigationPanel
@@ -3668,6 +3989,24 @@ useEffect(() => {
           >
 
             {viewMode === "3D" && <VenueModelNotice url={venue?.modelUrl || null} />}
+
+            {/* Visible group controls. They operate only on the currently selected
+                placement group and never on unrelated groups elsewhere in the venue. */}
+            {items.length > 0 && (
+              <div className="chair-group-controls" role="group" aria-label="Selected group movement controls">
+                <button type="button" className="move-all-chairs-button" onClick={selectSelectedGroup}
+                  title="Select and move only the placement group of the current object">
+                  <span className="chair-group-button-icon">↔️</span>
+                  <span>Move Selected Group</span>
+                </button>
+                {selectedIds.length > 1 && (
+                  <button type="button" className="move-chairs-individually-button" onClick={moveIndividually}
+                    title="Return the current object to individual movement">
+                    Move Individually
+                  </button>
+                )}
+              </div>
+            )}
 
             <Canvas
               shadows={
@@ -3757,45 +4096,50 @@ useEffect(() => {
                       key={
                         item.id
                       }
-
                       item={
                         item
                       }
-
-                      selected={
-                        selectedId ===
-                        item.id
-                      }
-
+                      selected={selectedIds.includes(item.id) || selectedId === item.id}
                       measureMode={
                         measureMode
                       }
-
                       measureSelected={
                         measurementStartId ===
                           item.id ||
                         measurementEndId ===
                           item.id
                       }
+                      onSelect={(e) => {
+                        setSelectedId(item.id);
+                        setSelectedIds((current) => {
+                          if (e.shiftKey) {
+                            return current.includes(item.id)
+                              ? current.filter((selected) => selected !== item.id)
+                              : [...current, item.id];
+                          }
 
-                      onSelect={() =>
-                        setSelectedId(
-                          item.id
-                        )
-                      }
+                          /* Keep an already selected chair group intact while dragging it. */
+                          if (current.length > 1 && current.includes(item.id)) {
+                            return current;
+                          }
 
+                          return [item.id];
+                        });
+                      }}
                       onMeasureSelect={() =>
                         selectMeasurementItem(
                           item.id
                         )
                       }
-
                       onMove={
                         position =>
                           moveItem(
                             item.id,
                             position
                           )
+                      }
+                      onStartDrag={
+                        handleStartDrag
                       }
                     />
                   ) : (
@@ -3803,39 +4147,41 @@ useEffect(() => {
                       key={
                         item.id
                       }
-
                       item={
                         item
                       }
-
-                      selected={
-                        selectedId ===
-                        item.id
-                      }
-
+                      selected={selectedIds.includes(item.id) || selectedId === item.id}
                       measureMode={
                         measureMode
                       }
-
                       measureSelected={
                         measurementStartId ===
                           item.id ||
                         measurementEndId ===
                           item.id
                       }
+                      onSelect={(e) => {
+                        setSelectedId(item.id);
+                        setSelectedIds((current) => {
+                          if (e.shiftKey) {
+                            return current.includes(item.id)
+                              ? current.filter((selected) => selected !== item.id)
+                              : [...current, item.id];
+                          }
 
-                      onSelect={() =>
-                        setSelectedId(
-                          item.id
-                        )
-                      }
+                          /* Keep an already selected chair group intact while dragging it. */
+                          if (current.length > 1 && current.includes(item.id)) {
+                            return current;
+                          }
 
+                          return [item.id];
+                        });
+                      }}
                       onMeasureSelect={() =>
                         selectMeasurementItem(
                           item.id
                         )
                       }
-
                       onMove={
                         position =>
                           moveItem(
@@ -3843,9 +4189,24 @@ useEffect(() => {
                             position
                           )
                       }
+                      onStartDrag={
+                        handleStartDrag
+                      }
                     />
                   )
               )}
+
+              {/* =================================================
+                  DRAG CONTROLLER
+              ================================================= */}
+
+              <DragController
+                isDragging={isDragging}
+                draggingId={draggingId}
+                dragOffset={dragOffset}
+                onMove={moveItem}
+                onDragEnd={handleEndDrag}
+              />
 
               {/* =================================================
                   MEASUREMENT
@@ -3857,7 +4218,6 @@ useEffect(() => {
                   start={
                     measurementStart
                   }
-
                   end={
                     measurementEnd
                   }
@@ -3910,26 +4270,24 @@ useEffect(() => {
 
               <OrbitControls
                 makeDefault
-
+                enabled={!isDragging}
                 enableRotate={
+                  !isDragging &&
                   viewMode ===
                   "3D"
                 }
-
                 enablePan={
-                  true
+                  !isDragging
                 }
-
                 minDistance={3}
-
                 maxDistance={18}
-
                 maxPolarAngle={
                   Math.PI /
                   2.05
                 }
               />
             </Canvas>
+
 
             {/* =================================================
                 WORKSPACE TITLE
@@ -3947,49 +4305,6 @@ useEffect(() => {
                   : venue?.name ||
                     "Wedding Venue"}
               </strong>
-
-              {viewMode === "3D" && (
-                <div className="workspace-theme-status">
-                  <div className="workspace-theme-status-title">
-                    {themesLoading
-                      ? "Checking available themes..."
-                      : selectedTheme
-                        ? `Theme: ${selectedTheme.name}`
-                        : themes.length === 0
-                          ? "No themes available"
-                          : "No theme selected"}
-                  </div>
-
-                  <div className="workspace-theme-status-text">
-                    {themesLoading
-                      ? "Your venue is ready. Theme information is loading."
-                      : selectedTheme
-                        ? "This theme is currently applied to your design workspace."
-                        : themes.length === 0
-                          ? "Create a theme from the Themes page to customize this venue. Your selected venue remains open and editable."
-                          : "Please select a theme to customize your venue design. Your selected venue and its 3D workspace will remain available."}
-                  </div>
-
-                  {!themesLoading && !selectedTheme && (
-                    themes.length === 0 ? (
-                      <a
-                        href="/themes"
-                        className="workspace-theme-action"
-                      >
-                        Create a Theme
-                      </a>
-                    ) : (
-                      <button
-                        type="button"
-                        className="workspace-theme-action"
-                        onClick={() => setThemeModalOpen(true)}
-                      >
-                        Choose a Theme
-                      </button>
-                    )
-                  )}
-                </div>
-              )}
             </div>
 
             {/* =================================================
@@ -4039,17 +4354,11 @@ useEffect(() => {
           ================================================= */}
 
           <PropertiesPanel
-            selected={
-              selected
-            }
-
-            deleteSelected={
-              deleteSelected
-            }
-
-            rotateSelected={
-              rotateSelected
-            }
+            selected={selected}
+            deleteSelected={deleteSelected}
+            deleteAllSelected={deleteAllSelected}
+            selectedCount={selectedIds.length || (selectedId !== null ? 1 : 0)}
+            rotateSelected={rotateSelected}
           />
         </div>
       </div>
@@ -4483,6 +4792,81 @@ useEffect(() => {
             );
         }
 
+
+        .select-all-chairs-button { position: absolute; top: 15px; right: 18px; z-index: 30; border: 1px solid #2563eb; background: #fff; color: #2563eb; border-radius: 8px; padding: 9px 12px; font-weight: 800; cursor: pointer; font-size: 12px; }
+        /* Always-visible chair movement controls */
+        .chair-group-controls {
+          position: absolute;
+          top: 18px;
+          right: 18px;
+          z-index: 20;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 6px;
+          width: max-content;
+          max-width: calc(100% - 36px);
+          pointer-events: auto;
+        }
+
+        .move-all-chairs-button,
+        .move-chairs-individually-button {
+          border-radius: 10px;
+          cursor: pointer;
+          font-weight: 800;
+          transition: all 0.2s ease;
+          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.14);
+        }
+
+        .move-all-chairs-button {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: 8px 10px;
+          border: 1px solid #2563eb;
+          background: #2563eb;
+          color: #ffffff;
+          font-size: 11px;
+          white-space: nowrap;
+        }
+
+        .move-all-chairs-button:hover {
+          transform: translateY(-1px);
+          background: #1d4ed8;
+        }
+
+        .move-all-chairs-button.active {
+          background: #15803d;
+          border-color: #15803d;
+        }
+
+        .chair-group-button-icon {
+          font-size: 14px;
+          line-height: 1;
+        }
+
+        .move-chairs-individually-button {
+          padding: 7px 10px;
+          border: 1px solid #cbd5e1;
+          background: #ffffff;
+          color: #334155;
+          font-size: 11px;
+          white-space: nowrap;
+        }
+
+        .move-chairs-individually-button:hover {
+          background: #f8fafc;
+        }
+
+        @media (max-width: 1100px) {
+          .chair-group-controls {
+            top: 14px;
+            right: 14px;
+            max-width: calc(100% - 28px);
+          }
+        }
+
         .workspace-title {
           position: absolute;
           top: 15px;
@@ -4676,6 +5060,7 @@ useEffect(() => {
           margin-top: 25px;
           display: flex;
           gap: 7px;
+          flex-wrap: wrap;
         }
 
         .rotate-button,
@@ -4687,6 +5072,8 @@ useEffect(() => {
           font-weight: 700;
           font-size: 11px;
         }
+        
+
 
         .rotate-button {
           border: 1px solid #bfdbfe;
@@ -4698,6 +5085,15 @@ useEffect(() => {
           border: 1px solid #fecaca;
           background: #fff5f5;
           color: #dc2626;
+        }
+
+        .delete-button.delete-all-button {
+          flex-basis: 100%;
+          width: 100%;
+          margin-top: 2px;
+          background: #991b1b;
+          color: #ffffff;
+          border-color: #991b1b;
         }
 
         .empty-properties {
@@ -4831,6 +5227,31 @@ useEffect(() => {
         /* =====================================================
            RESPONSIVE
         ===================================================== */
+
+
+        /* =====================================================
+           FINAL DARK MODE + TOPBAR VISIBILITY
+        ===================================================== */
+        html[data-theme="dark"] .editor { background: #0f1726; color: #e7edf7; }
+        html[data-theme="dark"] .topbar { background: #162033; border-bottom-color: #334155; box-shadow: 0 4px 18px rgba(0,0,0,.3); }
+        html[data-theme="dark"] .main-navigation { background: #1b2940; border-color: #3b4b63; }
+        html[data-theme="dark"] .top-nav-link { color: #cbd5e1; }
+        html[data-theme="dark"] .top-nav-link:hover { background: #334155; color: #ffffff; }
+        html[data-theme="dark"] .top-nav-link.active,
+        html[data-theme="dark"] .top-nav-link:first-child { background: #2563eb !important; color: #ffffff !important; }
+        html[data-theme="dark"] .brand-title, html[data-theme="dark"] .workspace-title, html[data-theme="dark"] .properties-title, html[data-theme="dark"] .panel-heading { color: #f8fafc !important; }
+        html[data-theme="dark"] .brand-subtitle, html[data-theme="dark"] .workspace-theme-status-text { color: #94a3b8 !important; }
+        html[data-theme="dark"] .left-nav, html[data-theme="dark"] .build-panel, html[data-theme="dark"] .properties-panel, html[data-theme="dark"] .workspace { background: #162033 !important; border-color: #334155 !important; }
+        html[data-theme="dark"] .panel-content, html[data-theme="dark"] .tip-box, html[data-theme="dark"] .selected-card, html[data-theme="dark"] .bulk-item-panel { background: #1b2940 !important; border-color: #3b4b63 !important; color: #e7edf7 !important; }
+        html[data-theme="dark"] .element-button { background: #1b2940 !important; border-color: #3b4b63 !important; }
+        html[data-theme="dark"] .element-name, html[data-theme="dark"] .section-title { color: #f8fafc !important; }
+        html[data-theme="dark"] .element-category, html[data-theme="dark"] .element-dims { color: #94a3b8 !important; }
+        html[data-theme="dark"] .theme-modal-card { background: #162033 !important; color: #e7edf7 !important; }
+        .top-actions { margin-left: 0 !important; }
+        .topbar > .theme-toggle { margin-left: auto !important; flex: 0 0 46px; }
+        html[data-theme="dark"] .view-toggle { background: #1b2940; border-color: #3b4b63; }
+        html[data-theme="dark"] .view-toggle button { color: #cbd5e1; }
+        html[data-theme="dark"] .view-toggle .view-active { background: #2563eb; color: #ffffff; }
 
         @media (max-width: 1100px) {
           .properties-panel {

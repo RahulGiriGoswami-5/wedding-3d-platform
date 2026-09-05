@@ -53,41 +53,7 @@ const emptyForm = {
   price: "",
 };
 
-function ThemeToggle() {
-  const [isDark, setIsDark] = useState(false);
 
-  useEffect(() => {
-    const savedTheme = window.localStorage.getItem("wedding-planner-theme");
-    const shouldUseDark = savedTheme === "dark";
-
-    setIsDark(shouldUseDark);
-    document.documentElement.dataset.theme = shouldUseDark ? "dark" : "light";
-  }, []);
-
-  function toggleTheme() {
-    const nextIsDark = !isDark;
-
-    setIsDark(nextIsDark);
-    document.documentElement.dataset.theme = nextIsDark ? "dark" : "light";
-
-    window.localStorage.setItem(
-      "wedding-planner-theme",
-      nextIsDark ? "dark" : "light"
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      className="theme-toggle"
-      onClick={toggleTheme}
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-    >
-      <span aria-hidden="true">{isDark ? "☀️" : "🌙"}</span>
-    </button>
-  );
-}
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [search, setSearch] = useState("");
@@ -407,10 +373,6 @@ export default function InventoryPage() {
             <Link href="/themes" className="planner-nav-link">Themes</Link>
             <Link href="/designs" className="planner-nav-link">Saved Designs</Link>
           </nav>
-
-          <div className="planner-theme-slot">
-            <ThemeToggle />
-          </div>
         </div>
       </header>
 

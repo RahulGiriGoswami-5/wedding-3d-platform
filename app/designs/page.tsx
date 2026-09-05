@@ -142,20 +142,23 @@ export default function DesignsPage() {
   }, []);
 
   useEffect(() => {
-    const savedTheme = window.localStorage.getItem("planner-theme");
-    setDarkMode(savedTheme === "dark");
+    const syncTheme = (value?: string | null) => {
+      setDarkMode((value ?? window.localStorage.getItem("wedding-planner-theme")) === "dark");
+    };
+    syncTheme();
+    const onThemeChange = (event: Event) => {
+      syncTheme((event as CustomEvent<string>).detail);
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === "wedding-planner-theme") syncTheme(event.newValue);
+    };
+    window.addEventListener("wedding-planner-theme-change", onThemeChange);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("wedding-planner-theme-change", onThemeChange);
+      window.removeEventListener("storage", onStorage);
+    };
   }, []);
-
-  function toggleDarkMode() {
-    setDarkMode(current => {
-      const next = !current;
-      window.localStorage.setItem(
-        "planner-theme",
-        next ? "dark" : "light"
-      );
-      return next;
-    });
-  }
 
   function getVenue(venueId: number) {
     return (
@@ -473,26 +476,6 @@ export default function DesignsPage() {
             <Link href="/themes" className="planner-nav-link">Themes</Link>
             <Link href="/designs" className="planner-nav-link planner-nav-active">Saved Designs</Link>
           </nav>
-
-          <button
-            type="button"
-            className="planner-theme-toggle"
-            onClick={toggleDarkMode}
-            aria-label={
-              darkMode
-                ? "Switch to light mode"
-                : "Switch to dark mode"
-            }
-            title={
-              darkMode
-                ? "Switch to light mode"
-                : "Switch to dark mode"
-            }
-          >
-            <span aria-hidden="true">
-              {darkMode ? "☀️" : "🌙"}
-            </span>
-          </button>
         </div>
       </header>
 

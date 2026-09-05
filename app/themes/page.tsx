@@ -72,16 +72,23 @@ export default function ThemesPage() {
   const [darkMode, setDarkMode] = useState(false);
 
   useEffect(() => {
-    const savedMode = window.localStorage.getItem("planner-color-mode");
-    setDarkMode(savedMode === "dark");
+    const syncTheme = (value?: string | null) => {
+      setDarkMode((value ?? window.localStorage.getItem("wedding-planner-theme")) === "dark");
+    };
+    syncTheme();
+    const onThemeChange = (event: Event) => {
+      syncTheme((event as CustomEvent<string>).detail);
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === "wedding-planner-theme") syncTheme(event.newValue);
+    };
+    window.addEventListener("wedding-planner-theme-change", onThemeChange);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("wedding-planner-theme-change", onThemeChange);
+      window.removeEventListener("storage", onStorage);
+    };
   }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem(
-      "planner-color-mode",
-      darkMode ? "dark" : "light"
-    );
-  }, [darkMode]);
 
   async function loadThemes() {
     try {
@@ -257,17 +264,6 @@ export default function ThemesPage() {
             <Link href="/themes" className="planner-nav-link planner-nav-active">Themes</Link>
             <Link href="/designs" className="planner-nav-link">Saved Designs</Link>
           </nav>
-
-          <button
-            type="button"
-            className="planner-theme-toggle"
-            onClick={() => setDarkMode((current) => !current)}
-            aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-            aria-pressed={darkMode}
-            title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-          >
-            {darkMode ? "☀" : "☾"}
-          </button>
         </div>
       </header>
 

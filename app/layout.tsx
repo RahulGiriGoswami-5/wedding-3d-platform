@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import ThemeSync from "./theme-sync";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,7 +25,28 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var saved = localStorage.getItem('wedding-planner-theme');
+                  var isDark = saved === 'dark';
+                  if (isDark) {
+                    document.documentElement.dataset.theme = 'dark';
+                    document.documentElement.classList.add('dark', 'dark-mode', 'page-dark');
+                  } else {
+                    document.documentElement.dataset.theme = 'light';
+                    document.documentElement.classList.remove('dark', 'dark-mode', 'page-dark');
+                  }
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
+      <body className="min-h-full flex flex-col"><ThemeSync />{children}</body>
     </html>
   );
 }

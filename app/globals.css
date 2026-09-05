@@ -25,7 +25,9 @@ body {
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
+  background-image: radial-gradient(circle at 1px 1px, rgba(100, 116, 139, 0.18) 1px, transparent 1.2px);
+  background-size: 20px 20px;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
   transition: var(--theme-transition);
@@ -48,6 +50,11 @@ body {
   transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
+.topbar .theme-toggle {
+  margin-left: 12px;
+  flex-shrink: 0;
+}
+
 .theme-toggle:hover {
   transform: translateY(-1px);
   background: #f1f5fb;
@@ -65,14 +72,20 @@ html[data-theme="dark"] .theme-toggle {
 }
 
 html[data-theme="dark"] body {
-  background: #101827;
+  background-color: #101827;
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(148, 163, 184, 0.28) 1px,
+    transparent 1.25px
+  );
+  background-size: 20px 20px;
   color: #e8edf7;
 }
 
 html[data-theme="dark"] .venues-page {
   background-color: #101827 !important;
   background-image: radial-gradient(
-    circle,
+    circle at 1px 1px,
     rgba(148, 163, 184, 0.34) 1px,
     transparent 1.25px
   ) !important;
@@ -114,10 +127,18 @@ html[data-theme="dark"] .top-nav-link {
   color: #c7d2e5 !important;
 }
 
-html[data-theme="dark"] .top-nav-link:hover,
-html[data-theme="dark"] .top-nav-link.active {
+html[data-theme="dark"] .top-nav-link:hover {
   background: #263754 !important;
   color: #ffffff !important;
+}
+
+html[data-theme="dark"] .top-nav-link.active,
+html[data-theme="dark"] .top-nav-link[aria-current="page"],
+html[data-theme="dark"] .planner-nav-active {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.45) !important;
 }
 
 html[data-theme="dark"] .venue-card,
@@ -277,3 +298,48 @@ html[data-theme="dark"] .theme-modal-card {
   background: #172235 !important;
   color: #e8edf7 !important;
 }
+
+html[data-theme="dark"] .editor .element-name {
+  color: #f1f5f9 !important;
+}
+
+html[data-theme="dark"] .editor .element-category {
+  color: #94a3b8 !important;
+}
+
+html[data-theme="dark"] .editor .element-dims {
+  color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .chair-bulk-panel {
+  background: #1a283e !important;
+  border-color: #384e6d !important;
+  color: #e8edf7 !important;
+}
+
+html[data-theme="dark"] .chair-bulk-panel input[type="number"] {
+  background: #111b2b !important;
+  border-color: #384e6d !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="dark"] .chair-bulk-panel .preset-btn {
+  background: #233550 !important;
+  border-color: #3f597d !important;
+  color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .chair-bulk-panel .preset-btn:hover,
+html[data-theme="dark"] .chair-bulk-panel .preset-btn.active {
+  background: #2563eb !important;
+  border-color: #3b82f6 !important;
+  color: #ffffff !important;
+}
+
+
+
+/* Final global theme bridge: every page inherits the same saved theme. */
+html[data-theme="dark"] body { background-color: #0f1726; color: #e7edf7; }
+html[data-theme="dark"] main, html[data-theme="dark"] .page, html[data-theme="dark"] .editor { color: #e7edf7; }
+html[data-theme="dark"] .card, html[data-theme="dark"] .panel, html[data-theme="dark"] [class*="card"], html[data-theme="dark"] [class*="panel"] { border-color: #334155; }
+html[data-theme="dark"] .top-nav-link.active, html[data-theme="dark"] .top-nav-link:first-child { background: #2563eb !important; color: #ffffff !important; font-weight: 800; }
