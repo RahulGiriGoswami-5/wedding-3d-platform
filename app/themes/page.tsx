@@ -1339,6 +1339,7 @@ export default function ThemesPage() {
         }
 
 
+        @media (max-width: 900px) and (orientation: landscape), (max-width: 700px) {
         /* =====================================================
            FINAL 844 x 390 MOBILE LANDSCAPE LAYOUT
            Uses the same compact navigation scale as Inventory.
@@ -1607,7 +1608,9 @@ export default function ThemesPage() {
           font-size: 11px;
         }
 
-        @media (max-width: 900px) and (orientation: landscape), (max-height: 500px) {
+        }
+
+        @media (max-width: 900px) and (orientation: landscape) {
           .planner-navbar-inner {
             padding: 6px 10px 5px;
           }
